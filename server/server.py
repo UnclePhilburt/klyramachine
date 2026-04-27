@@ -226,8 +226,8 @@ async def text_to_speech(text: str = Form(...)):
     Returns audio file
     """
     try:
-        # Generate speech using ElevenLabs
-        voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
+        # Generate speech using ElevenLabs (Bradford voice)
+        voice_id = config.get("elevenlabs_voice", "NNl6r8mD7vthiJatiJt1")
 
         audio_generator = elevenlabs_client.text_to_speech.convert(
             voice_id=voice_id,
@@ -346,8 +346,8 @@ async def process_interaction(
         print(f"Generating speech for: {assistant_message[:50]}...")
 
         try:
-            # Use ElevenLabs - great for personality and sarcasm
-            voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
+            # Use ElevenLabs - great for personality and sarcasm (Bradford voice)
+            voice_id = config.get("elevenlabs_voice", "NNl6r8mD7vthiJatiJt1")
 
             audio_generator = elevenlabs_client.text_to_speech.convert(
                 voice_id=voice_id,
