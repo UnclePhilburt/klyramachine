@@ -19,7 +19,7 @@ INSTALL_DIR="$HOME/klyramachine"
 
 echo "📦 Step 1: Installing system dependencies..."
 sudo apt update
-sudo apt install -y git python3-pip python3-pyaudio portaudio19-dev python3-opencv
+sudo apt install -y git python3-pip python3-venv python3-dev build-essential python3-pyaudio portaudio19-dev python3-opencv python3-scipy python3-numpy
 
 echo ""
 echo "📥 Step 2: Downloading Klyra Machine..."
