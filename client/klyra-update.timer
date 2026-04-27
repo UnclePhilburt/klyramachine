@@ -6,6 +6,7 @@ After=network.target
 # Check for updates every hour (5 minutes after boot)
 OnBootSec=5min
 OnUnitActiveSec=1h
+Unit=klyra-update.service
 
 [Install]
 WantedBy=timers.target

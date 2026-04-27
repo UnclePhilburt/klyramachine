@@ -79,19 +79,33 @@ After=network.target
 [Timer]
 OnBootSec=5min
 OnUnitActiveSec=1h
+Unit=klyra-update.service
 
 [Install]
 WantedBy=timers.target
 TIMEREOF
 
-    # Reload systemd and try to enable timer
+    # Reload systemd
     sudo systemctl daemon-reload
 
-    if sudo systemctl enable klyra-update.timer 2>/dev/null && sudo systemctl start klyra-update.timer 2>/dev/null; then
-        echo "[OK] Auto-update enabled! Checks for updates every hour."
+    # Verify the timer file is valid
+    if systemd-analyze verify $UPDATE_TIMER 2>/dev/null; then
+        echo "[OK] Timer file verified successfully"
     else
-        echo "[WARNING] Auto-update timer could not be enabled (optional feature)"
-        echo "   You can manually update with: cd $SCRIPT_DIR/.. && git pull"
+        echo "[WARNING] Timer file validation failed, checking details..."
+        systemd-analyze verify $UPDATE_TIMER 2>&1 || true
+    fi
+
+    # Try to enable and start timer
+    if sudo systemctl enable klyra-update.timer 2>&1; then
+        if sudo systemctl start klyra-update.timer 2>&1; then
+            echo "[OK] Auto-update enabled! Checks for updates every hour."
+            sudo systemctl status klyra-update.timer --no-pager || true
+        else
+            echo "[ERROR] Timer failed to start. Check logs with: sudo journalctl -u klyra-update.timer"
+        fi
+    else
+        echo "[ERROR] Timer failed to enable. Check logs with: sudo journalctl -xe"
     fi
 else
     echo "[WARNING] systemd not available, skipping auto-update timer"
