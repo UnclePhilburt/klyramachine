@@ -219,6 +219,21 @@ class ImprovedWakeWordClient:
         except:
             pass
 
+    def play_ding(self):
+        """Play ding sound when wake word is detected"""
+        try:
+            import os
+            ding_path = "ding.mp3"
+            if os.path.exists(ding_path):
+                # Use a sound effect channel instead of music to avoid conflicts
+                ding_sound = pygame.mixer.Sound(ding_path)
+                ding_sound.play()
+                # Don't wait for it to finish, continue immediately
+            else:
+                print(f"   ⚠️  ding.mp3 not found in {os.getcwd()}")
+        except Exception as e:
+            print(f"   ⚠️  Error playing ding: {e}")
+
     def process_command(self, text):
         """Send command to Klyra"""
         print(f"You: {text}")
@@ -322,6 +337,9 @@ class ImprovedWakeWordClient:
 
         if wake_detected:
             print(f"✓ Wake word detected!\n")
+
+            # Play ding sound
+            self.play_ding()
 
             if command and len(command) > 3:
                 # Command was included with wake word
