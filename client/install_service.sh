@@ -45,50 +45,8 @@ echo ""
 echo "✓ Klyra service installed!"
 echo ""
 
-# Install auto-update service and timer
-echo "Installing auto-update service..."
-
-# Create auto-update service file
-UPDATE_SERVICE="/etc/systemd/system/klyra-update.service"
-sudo tee $UPDATE_SERVICE > /dev/null <<EOF
-[Unit]
-Description=Klyra Auto-Update
-After=network.target
-
-[Service]
-Type=oneshot
-User=$USER
-WorkingDirectory=$SCRIPT_DIR/..
-ExecStart=/bin/bash $SCRIPT_DIR/auto_update.sh
-StandardOutput=journal
-StandardError=journal
-EOF
-
-# Create auto-update timer file
-UPDATE_TIMER="/etc/systemd/system/klyra-update.timer"
-sudo tee $UPDATE_TIMER > /dev/null <<EOF
-[Unit]
-Description=Klyra Auto-Update Timer
-Requires=klyra-update.service
-
-[Timer]
-# Check for updates every minute
-OnBootSec=1min
-OnUnitActiveSec=1min
-
-[Install]
-WantedBy=timers.target
-EOF
-
-# Make auto-update script executable
-chmod +x $SCRIPT_DIR/auto_update.sh
-
-# Reload systemd and enable timer
-sudo systemctl daemon-reload
-sudo systemctl enable klyra-update.timer
-sudo systemctl start klyra-update.timer
-
-echo "✓ Auto-update enabled! Checks for updates every minute."
+# Auto-update is optional - skipping for now to simplify installation
+echo "[SKIP] Auto-update service (can be added later)"
 echo ""
 
 # Ask about lockdown
