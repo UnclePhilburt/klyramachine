@@ -39,6 +39,34 @@ if git diff --name-only HEAD@{1} HEAD | grep -q "requirements.txt"; then
     cd ..
 fi
 
+# Re-apply lockdown if klyra user exists (lockdown was previously enabled)
+if id "klyra" &>/dev/null; then
+    echo "🔒 Re-applying security lockdown..."
+
+    # Change ownership to klyra user
+    sudo chown -R klyra:klyra "$SCRIPT_DIR/.."
+
+    # Restrict permissions
+    sudo chmod -R 500 "$SCRIPT_DIR/.."
+
+    # Make config.json unreadable except by klyra user
+    if [ -f "$SCRIPT_DIR/client/config.json" ]; then
+        sudo chmod 400 "$SCRIPT_DIR/client/config.json"
+    fi
+
+    # Make conversation storage private
+    if [ -d "$SCRIPT_DIR/server/conversations" ]; then
+        sudo chmod 700 "$SCRIPT_DIR/server/conversations"
+    fi
+
+    # Hide .git directory
+    if [ -d "$SCRIPT_DIR/.git" ]; then
+        sudo chmod 700 "$SCRIPT_DIR/.git"
+    fi
+
+    echo "✓ Security lockdown reapplied!"
+fi
+
 # Restart the service if it's running
 if systemctl is-active --quiet klyra; then
     echo "🔄 Restarting Klyra service..."
