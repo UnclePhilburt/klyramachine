@@ -363,14 +363,18 @@ async def process_interaction(
             )
         except Exception as tts_error:
             print(f"TTS Error: {tts_error}")
-            # Return response with text but no audio
+            # Return response with text but no audio (encode safely)
+            import base64
+            response_text_b64 = base64.b64encode(assistant_message.encode('utf-8')).decode('ascii')
+            scene_context_b64 = base64.b64encode((scene_context or "").encode('utf-8')).decode('ascii')
+
             return Response(
                 content=b"",
                 media_type="text/plain",
                 headers={
-                    "X-Response-Text": assistant_message,
-                    "X-Scene-Context": scene_context or "",
-                    "X-TTS-Error": str(tts_error)
+                    "X-Response-Text-B64": response_text_b64,
+                    "X-Scene-Context-B64": scene_context_b64,
+                    "X-TTS-Error": "TTS failed but audio generated, check client"
                 }
             )
 
