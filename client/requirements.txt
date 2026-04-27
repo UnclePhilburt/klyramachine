@@ -1,0 +1,16 @@
+# HTTP client
+requests>=2.31.0
+
+# Camera and image processing
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# Audio input/output
+pyaudio>=0.2.13
+pygame>=2.5.0
+
+# Raspberry Pi camera (uncomment if using Pi camera module)
+# picamera2>=0.3.0
+
+# Configuration
+python-dotenv>=1.0.0

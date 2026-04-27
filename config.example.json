@@ -1,0 +1,8 @@
+{
+  "openai_api_key": "your-openai-api-key-here",
+  "elevenlabs_api_key": "your-elevenlabs-api-key-here",
+  "camera_index": 0,
+  "vision_interval_seconds": 5,
+  "voice_name": "Adam",
+  "system_prompt": "You are Klyra, a friendly AI companion who can see and interact with the world. Be conversational, helpful, and observant of your surroundings."
+}

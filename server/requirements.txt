@@ -1,0 +1,14 @@
+# Web server
+fastapi>=0.104.0
+uvicorn>=0.24.0
+python-multipart>=0.0.6
+
+# AI APIs
+openai>=1.0.0
+elevenlabs>=0.2.0
+
+# Image processing
+Pillow>=10.0.0
+
+# Configuration
+python-dotenv>=1.0.0

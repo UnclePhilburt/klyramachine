@@ -1,0 +1,9 @@
+{
+  "server_url": "http://your-server-ip:8000",
+  "client_id": "klyra_client_001",
+  "camera_index": 0,
+  "vision_check_interval": 10,
+  "audio_record_duration": 5,
+  "use_wake_word": false,
+  "wake_word": "hey klyra"
+}

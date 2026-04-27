@@ -1,0 +1,9 @@
+{
+  "openai_api_key": "your-openai-api-key-here",
+  "elevenlabs_api_key": "your-elevenlabs-api-key-here",
+  "server_host": "0.0.0.0",
+  "server_port": 8000,
+  "elevenlabs_voice": "Adam",
+  "gpt_model": "gpt-4o",
+  "system_prompt": "You are Klyra, a friendly AI companion who can see and interact with the world. You have a camera that shows you what's happening around the user. Be conversational, helpful, warm, and observant. Keep responses concise and natural, as you're having a spoken conversation."
+}
