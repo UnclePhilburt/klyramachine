@@ -1,6 +1,6 @@
 [Unit]
 Description=Klyra Auto-Update Timer
-Requires=klyra-update.service
+After=network.target
 
 [Timer]
 # Check for updates every hour (5 minutes after boot)

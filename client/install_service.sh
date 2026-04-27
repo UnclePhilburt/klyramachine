@@ -45,39 +45,36 @@ echo ""
 echo "✓ Klyra service installed!"
 echo ""
 
-# Install auto-update service and timer
+# Install auto-update service and timer (optional)
 echo "Installing auto-update service..."
 
 # Make auto-update script executable first
-chmod +x $SCRIPT_DIR/auto_update.sh
+chmod +x $SCRIPT_DIR/auto_update.sh 2>/dev/null || true
 
-# Create auto-update service file
-UPDATE_SERVICE="/etc/systemd/system/klyra-update.service"
-sudo tee $UPDATE_SERVICE > /dev/null <<'SERVICEEOF'
+# Try to install auto-update, but don't fail if it doesn't work
+if command -v systemctl &> /dev/null; then
+    # Create auto-update service file
+    UPDATE_SERVICE="/etc/systemd/system/klyra-update.service"
+    sudo tee $UPDATE_SERVICE > /dev/null <<SERVICEEOF
 [Unit]
 Description=Klyra Auto-Update
 After=network.target
 
 [Service]
 Type=oneshot
-User=USER_PLACEHOLDER
-WorkingDirectory=WORKDIR_PLACEHOLDER
-ExecStart=/bin/bash SCRIPT_DIR_PLACEHOLDER/auto_update.sh
+User=$USER
+WorkingDirectory=$SCRIPT_DIR/..
+ExecStart=/bin/bash $SCRIPT_DIR/auto_update.sh
 StandardOutput=journal
 StandardError=journal
 SERVICEEOF
 
-# Replace placeholders
-sudo sed -i "s|USER_PLACEHOLDER|$USER|g" $UPDATE_SERVICE
-sudo sed -i "s|WORKDIR_PLACEHOLDER|$SCRIPT_DIR/..|g" $UPDATE_SERVICE
-sudo sed -i "s|SCRIPT_DIR_PLACEHOLDER|$SCRIPT_DIR|g" $UPDATE_SERVICE
-
-# Create auto-update timer file
-UPDATE_TIMER="/etc/systemd/system/klyra-update.timer"
-sudo tee $UPDATE_TIMER > /dev/null <<'TIMEREOF'
+    # Create auto-update timer file
+    UPDATE_TIMER="/etc/systemd/system/klyra-update.timer"
+    sudo tee $UPDATE_TIMER > /dev/null <<TIMEREOF
 [Unit]
 Description=Klyra Auto-Update Timer
-Requires=klyra-update.service
+After=network.target
 
 [Timer]
 OnBootSec=5min
@@ -87,12 +84,18 @@ OnUnitActiveSec=1h
 WantedBy=timers.target
 TIMEREOF
 
-# Reload systemd and enable timer
-sudo systemctl daemon-reload
-sudo systemctl enable klyra-update.timer 2>&1 || echo "[WARNING] Failed to enable auto-update timer (non-critical)"
-sudo systemctl start klyra-update.timer 2>&1 || echo "[WARNING] Failed to start auto-update timer (non-critical)"
+    # Reload systemd and try to enable timer
+    sudo systemctl daemon-reload
 
-echo "[OK] Auto-update enabled! Checks for updates every hour."
+    if sudo systemctl enable klyra-update.timer 2>/dev/null && sudo systemctl start klyra-update.timer 2>/dev/null; then
+        echo "[OK] Auto-update enabled! Checks for updates every hour."
+    else
+        echo "[WARNING] Auto-update timer could not be enabled (optional feature)"
+        echo "   You can manually update with: cd $SCRIPT_DIR/.. && git pull"
+    fi
+else
+    echo "[WARNING] systemd not available, skipping auto-update timer"
+fi
 echo ""
 
 # Ask about lockdown
