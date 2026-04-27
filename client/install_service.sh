@@ -22,9 +22,13 @@ echo ""
 log_info "Starting service installation..."
 log_info "Timestamp: $(date)"
 
-# Get the current directory
+# Get the current directory (absolute path)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Get the parent directory (normalized absolute path)
+PARENT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 log_info "Script directory: $SCRIPT_DIR"
+log_info "Parent directory: $PARENT_DIR"
 log_info "Current user: $USER"
 log_info "Home directory: $HOME"
 
@@ -148,7 +152,7 @@ After=network.target
 [Service]
 Type=oneshot
 User=$USER
-WorkingDirectory=$SCRIPT_DIR/..
+WorkingDirectory=$PARENT_DIR
 ExecStart=/bin/bash $SCRIPT_DIR/auto_update.sh
 StandardOutput=journal
 StandardError=journal
@@ -157,7 +161,15 @@ SERVICEEOF
     if [ -f "$UPDATE_SERVICE" ]; then
         log_success "Auto-update service file created"
         log_info "Service file contents:"
+        echo "---"
         sudo cat $UPDATE_SERVICE
+        echo "---"
+
+        # Show resolved paths for debugging
+        log_info "Resolved paths in service:"
+        log_info "  User: $USER"
+        log_info "  WorkingDirectory: $PARENT_DIR"
+        log_info "  ExecStart: /bin/bash $SCRIPT_DIR/auto_update.sh"
     else
         log_error "Failed to create auto-update service"
     fi
@@ -189,7 +201,9 @@ TIMEREOF
     if [ -f "$UPDATE_TIMER" ]; then
         log_success "Auto-update timer file created"
         log_info "Timer file contents:"
+        echo "---"
         sudo cat $UPDATE_TIMER
+        echo "---"
     else
         log_error "Failed to create auto-update timer"
     fi
@@ -267,7 +281,7 @@ TIMEREOF
         log_info "Installing cron-based auto-update (runs every hour)..."
 
         # Create cron job
-        CRON_JOB="0 * * * * cd $SCRIPT_DIR/.. && $SCRIPT_DIR/auto_update.sh >> /tmp/klyra-update.log 2>&1"
+        CRON_JOB="0 * * * * cd $PARENT_DIR && $SCRIPT_DIR/auto_update.sh >> /tmp/klyra-update.log 2>&1"
 
         # Add to crontab if not already there
         (crontab -l 2>/dev/null | grep -v "klyra-update.sh" ; echo "$CRON_JOB") | crontab -
