@@ -90,6 +90,50 @@ sudo systemctl start klyra-update.timer
 
 echo "✓ Auto-update enabled! Checks for updates every hour."
 echo ""
+
+# Ask about lockdown
+read -p "Do you want to enable security lockdown? (yes/no): " lockdown_choice
+
+if [ "$lockdown_choice" = "yes" ] || [ "$lockdown_choice" = "y" ]; then
+    echo ""
+    echo "Applying security lockdown..."
+
+    # Create a dedicated klyra user if it doesn't exist
+    if ! id "klyra" &>/dev/null; then
+        echo "Creating 'klyra' user..."
+        sudo useradd -r -s /bin/false klyra
+    fi
+
+    # Change ownership to klyra user
+    sudo chown -R klyra:klyra "$SCRIPT_DIR/.."
+
+    # Restrict permissions
+    sudo chmod -R 500 "$SCRIPT_DIR/.."
+
+    # Make config.json unreadable except by klyra user
+    if [ -f "$SCRIPT_DIR/config.json" ]; then
+        sudo chmod 400 "$SCRIPT_DIR/config.json"
+    fi
+
+    # Make conversation storage private
+    if [ -d "$SCRIPT_DIR/../server/conversations" ]; then
+        sudo chmod 700 "$SCRIPT_DIR/../server/conversations"
+    fi
+
+    # Hide .git directory
+    if [ -d "$SCRIPT_DIR/../.git" ]; then
+        sudo chmod 700 "$SCRIPT_DIR/../.git"
+    fi
+
+    echo "✓ Security lockdown enabled!"
+    echo "  - Code: Read-only for klyra user only"
+    echo "  - Config: Hidden from all users except klyra"
+    echo "  - Conversations: Private"
+else
+    echo "Security lockdown skipped."
+fi
+
+echo ""
 echo "Commands:"
 echo "  Start:   sudo systemctl start klyra"
 echo "  Stop:    sudo systemctl stop klyra"
@@ -102,4 +146,9 @@ echo "  Manual update: cd $SCRIPT_DIR/.. && ./client/auto_update.sh"
 echo "  Update logs:   sudo journalctl -u klyra-update -f"
 echo "  Update status: sudo systemctl status klyra-update.timer"
 echo ""
+if [ "$lockdown_choice" = "yes" ] || [ "$lockdown_choice" = "y" ]; then
+    echo "Security:"
+    echo "  To undo lockdown: sudo chmod -R 755 $SCRIPT_DIR/.."
+    echo ""
+fi
 echo "To start Klyra now, run: sudo systemctl start klyra"
