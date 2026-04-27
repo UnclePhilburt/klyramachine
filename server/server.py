@@ -59,8 +59,8 @@ elevenlabs_client = ElevenLabs(api_key=config["elevenlabs_api_key"])
 # Initialize Gemini (if API key provided)
 if config.get("gemini_api_key"):
     genai.configure(api_key=config["gemini_api_key"])
-    # Use gemini-1.5-flash for real-time info (fast and current)
-    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+    # Use gemini-2.5-flash for real-time info (stable, fast, and current as of 2025)
+    gemini_model = genai.GenerativeModel('gemini-2.5-flash')
 else:
     gemini_model = None
 
