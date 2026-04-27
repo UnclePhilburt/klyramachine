@@ -39,9 +39,19 @@ git clone https://github.com/UnclePhilburt/klyramachine.git "$INSTALL_DIR"
 cd "$INSTALL_DIR/client"
 
 echo ""
-echo "📦 Step 3: Installing Python dependencies..."
-# Try with --break-system-packages flag (needed for newer Raspberry Pi OS)
-pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt --user
+echo "📦 Step 3: Setting up Python environment..."
+
+# Create virtual environment
+if [ ! -d "venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv venv --system-site-packages
+fi
+
+# Activate virtual environment
+source venv/bin/activate
+
+echo "Installing Python dependencies..."
+pip install -r requirements.txt
 
 # Note: webrtcvad might fail to build on some systems, but the client will still work
 echo "   (If webrtcvad fails to install, that's okay - the client will use fallback speech detection)"
@@ -77,6 +87,7 @@ fi
 echo ""
 echo "🚀 Step 5: Setting up auto-start..."
 chmod +x install_service.sh
+chmod +x start_klyra.sh
 ./install_service.sh
 
 echo ""
@@ -86,6 +97,9 @@ echo "=========================================="
 echo ""
 echo "To start Klyra now, run:"
 echo "  sudo systemctl start klyra"
+echo ""
+echo "Or for a quick test (without service):"
+echo "  cd $INSTALL_DIR/client && ./start_klyra.sh"
 echo ""
 echo "To check status:"
 echo "  sudo systemctl status klyra"

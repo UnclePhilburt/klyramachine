@@ -35,7 +35,13 @@ echo "✓ Code updated successfully!"
 if git diff --name-only HEAD@{1} HEAD | grep -q "requirements.txt"; then
     echo "📦 Installing updated dependencies..."
     cd client
-    pip3 install -r requirements.txt --upgrade
+    # Use virtual environment if it exists
+    if [ -f "venv/bin/activate" ]; then
+        source venv/bin/activate
+        pip install -r requirements.txt --upgrade
+    else
+        pip3 install -r requirements.txt --upgrade --break-system-packages 2>/dev/null || pip3 install -r requirements.txt --upgrade --user
+    fi
     cd ..
 fi
 
