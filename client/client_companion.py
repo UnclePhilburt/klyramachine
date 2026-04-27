@@ -15,6 +15,7 @@ import sys
 import numpy as np
 import random
 from datetime import datetime
+import webrtcvad
 
 print("DEBUG: All imports loaded successfully")
 
@@ -45,13 +46,18 @@ class CompanionClient:
         self.audio_format = pyaudio.paInt16
         self.channels = 1
         self.rate = 16000
-        self.chunk = 1024
+        self.chunk = 480  # 30ms at 16kHz for WebRTC VAD compatibility
         print("Step 6: Audio ready!")
 
         # Initialize pygame
         print("Step 7: Starting pygame mixer...")
         pygame.mixer.init()
         print("Step 8: Pygame ready!")
+
+        # Initialize WebRTC VAD for better speech detection
+        print("Step 9: Starting voice activity detection...")
+        self.vad = webrtcvad.Vad(2)  # Aggressiveness 0-3 (2 is moderate)
+        print("Step 10: VAD ready!")
 
         # Companion state
         self.last_observation_time = time.time()
@@ -63,7 +69,7 @@ class CompanionClient:
         self.running = False
         self.is_user_speaking = False  # Track if user is currently speaking
 
-        print("Step 9: All systems ready!\n")
+        print("Step 11: All systems ready!\n")
 
     def detect_motion(self, current_frame):
         """Detect if there's motion between frames"""
@@ -94,11 +100,24 @@ class CompanionClient:
         return audio_array.tobytes()
 
     def detect_speech(self, audio_chunk):
-        """Check if audio chunk has speech"""
-        audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
-        volume = np.abs(audio_data).mean()
-        # Increased threshold to reduce false positives from microphone glitches
-        return volume > 1500
+        """Check if audio chunk has speech using WebRTC VAD"""
+        try:
+            # WebRTC VAD requires specific frame lengths (10, 20, or 30 ms)
+            # At 16000 Hz, 30ms = 480 samples = 960 bytes
+            # If chunk is wrong size, fall back to volume detection
+            if len(audio_chunk) != 960:
+                audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
+                volume = np.abs(audio_data).mean()
+                return volume > 1500
+
+            # Use WebRTC VAD for accurate speech detection
+            is_speech = self.vad.is_speech(audio_chunk, self.rate)
+            return is_speech
+        except:
+            # Fallback to volume detection if VAD fails
+            audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
+            volume = np.abs(audio_data).mean()
+            return volume > 1500
 
     def check_if_user_speaking(self):
         """Quick check if user is currently speaking - non-blocking"""
