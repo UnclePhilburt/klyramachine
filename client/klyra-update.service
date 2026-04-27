@@ -1,0 +1,11 @@
+[Unit]
+Description=Klyra Auto-Update
+After=network.target
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/home/pi/klyramachine/client
+ExecStart=/bin/bash /home/pi/klyramachine/client/auto_update.sh
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,11 @@
+[Unit]
+Description=Klyra Auto-Update Timer
+Requires=klyra-update.service
+
+[Timer]
+# Check for updates every hour
+OnBootSec=5min
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

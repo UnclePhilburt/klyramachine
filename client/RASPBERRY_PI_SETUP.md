@@ -58,9 +58,14 @@ Press `Ctrl+C` to stop.
 # Make the install script executable
 chmod +x install_service.sh
 
-# Run the installer
+# Run the installer (sets up auto-start AND auto-update)
 ./install_service.sh
 ```
+
+This installer will:
+- ✅ Enable Klyra to start automatically on boot
+- ✅ Enable auto-restart if Klyra crashes
+- ✅ Enable automatic updates from GitHub every hour
 
 ### Start the service
 
@@ -78,6 +83,37 @@ sudo systemctl status klyra
 
 ```bash
 sudo journalctl -u klyra -f
+```
+
+## Auto-Update Feature
+
+Klyra automatically checks for updates every hour and restarts with the latest code!
+
+### Manual update
+
+```bash
+cd ~/klyramachine/client
+./auto_update.sh
+```
+
+### Check when last updated
+
+```bash
+sudo journalctl -u klyra-update -n 20
+```
+
+### Disable auto-update
+
+```bash
+sudo systemctl stop klyra-update.timer
+sudo systemctl disable klyra-update.timer
+```
+
+### Re-enable auto-update
+
+```bash
+sudo systemctl enable klyra-update.timer
+sudo systemctl start klyra-update.timer
 ```
 
 ## Useful Commands
