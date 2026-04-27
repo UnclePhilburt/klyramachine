@@ -348,6 +348,29 @@ class CompanionClient:
         except:
             pass
 
+    def listen_for_followup(self, timeout=5):
+        """Listen for a follow-up response after Buddy speaks"""
+        print("\n👂 Listening for follow-up... (speak within 5 seconds or stay silent)")
+
+        # Wait and check if user starts speaking
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            audio_data = self.record_with_speech_detection(duration=1)
+            if audio_data:
+                # User is speaking! Get the full command
+                print("🎤 Heard you! Continue speaking...")
+
+                # Record until silence
+                full_audio = self.record_until_silence()
+                if full_audio:
+                    command = self.transcribe_audio(full_audio)
+                    if command:
+                        self.process_command(command)
+                        return
+            time.sleep(0.1)
+
+        print("(No follow-up detected)\n")
+
     def process_command(self, text):
         """Send command to Klyra"""
         print(f"You: {text}")
@@ -380,6 +403,9 @@ class CompanionClient:
 
                 if len(response.content) > 0:
                     self.play_audio(response.content)
+
+                    # After Buddy finishes talking, listen for a follow-up response
+                    self.listen_for_followup()
 
         except Exception as e:
             print(f"Error: {e}")
