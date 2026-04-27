@@ -72,9 +72,9 @@ Description=Klyra Auto-Update Timer
 Requires=klyra-update.service
 
 [Timer]
-# Check for updates every hour
-OnBootSec=5min
-OnUnitActiveSec=1h
+# Check for updates every minute
+OnBootSec=1min
+OnUnitActiveSec=1min
 
 [Install]
 WantedBy=timers.target
@@ -88,7 +88,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable klyra-update.timer
 sudo systemctl start klyra-update.timer
 
-echo "✓ Auto-update enabled! Checks for updates every hour."
+echo "✓ Auto-update enabled! Checks for updates every minute."
 echo ""
 
 # Ask about lockdown
