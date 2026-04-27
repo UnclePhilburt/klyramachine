@@ -199,10 +199,13 @@ async def speech_to_text(audio: UploadFile = File(...)):
         audio_file = io.BytesIO(audio_data)
         audio_file.name = "speech.wav"
 
-        # Transcribe with Whisper
+        # Transcribe with Whisper with enhanced parameters
         transcript = openai_client.audio.transcriptions.create(
             model="whisper-1",
-            file=audio_file
+            file=audio_file,
+            language="en",  # Set to English for better accuracy
+            prompt="Hey Buddy, Hey body, Hey budy, Hey buddie",  # Hint for wake word variants
+            temperature=0.0  # Use deterministic output for better consistency
         )
 
         return {

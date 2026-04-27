@@ -83,6 +83,15 @@ class CompanionClient:
         # Threshold for motion detection
         return motion_level > 5
 
+    def apply_noise_gate(self, audio_data, threshold=500):
+        """Apply noise gate to remove background noise"""
+        # Simple noise gate - zeros out audio below threshold
+        audio_array = np.frombuffer(audio_data, dtype=np.int16).copy()
+        volume = np.abs(audio_array).mean()
+        if volume < threshold:
+            audio_array = np.zeros_like(audio_array)
+        return audio_array.tobytes()
+
     def detect_speech(self, audio_chunk):
         """Check if audio chunk has speech"""
         audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
@@ -165,6 +174,25 @@ class CompanionClient:
             self.observation_interval_max
         )
 
+    def preprocess_audio(self, frames):
+        """Apply noise reduction and audio enhancement"""
+        # Combine all frames
+        audio_data = np.frombuffer(b''.join(frames), dtype=np.int16)
+
+        # Apply simple high-pass filter to remove low-frequency noise
+        # This helps reduce rumble and background hum
+        from scipy import signal
+        # High-pass filter at 80Hz to remove low-frequency noise
+        sos = signal.butter(4, 80, 'hp', fs=self.rate, output='sos')
+        filtered = signal.sosfilt(sos, audio_data)
+
+        # Normalize audio to maximize volume
+        max_val = np.abs(filtered).max()
+        if max_val > 0:
+            filtered = filtered * (32767 / max_val * 0.9)  # 90% of max to avoid clipping
+
+        return filtered.astype(np.int16).tobytes()
+
     def record_with_speech_detection(self, duration=2):
         """Record audio, return None if no speech detected"""
         try:
@@ -192,12 +220,15 @@ class CompanionClient:
             if not has_speech:
                 return None
 
+            # Apply audio preprocessing
+            processed_audio = self.preprocess_audio(frames)
+
             wav_buffer = io.BytesIO()
             with wave.open(wav_buffer, 'wb') as wf:
                 wf.setnchannels(self.channels)
                 wf.setsampwidth(self.audio.get_sample_size(self.audio_format))
                 wf.setframerate(self.rate)
-                wf.writeframes(b''.join(frames))
+                wf.writeframes(processed_audio)
 
             wav_buffer.seek(0)
             return wav_buffer.read()
@@ -244,12 +275,15 @@ class CompanionClient:
             if len(frames) == 0:
                 return None
 
+            # Apply audio preprocessing
+            processed_audio = self.preprocess_audio(frames)
+
             wav_buffer = io.BytesIO()
             with wave.open(wav_buffer, 'wb') as wf:
                 wf.setnchannels(self.channels)
                 wf.setsampwidth(self.audio.get_sample_size(self.audio_format))
                 wf.setframerate(self.rate)
-                wf.writeframes(b''.join(frames))
+                wf.writeframes(processed_audio)
 
             wav_buffer.seek(0)
             return wav_buffer.read()

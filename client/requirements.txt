@@ -9,6 +9,10 @@ Pillow>=10.0.0
 pyaudio>=0.2.13
 pygame>=2.5.0
 
+# Audio processing and noise reduction
+scipy>=1.11.0
+numpy>=1.24.0
+
 # Raspberry Pi camera (uncomment if using Pi camera module)
 # picamera2>=0.3.0
 
