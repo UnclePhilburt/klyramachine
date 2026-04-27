@@ -8,6 +8,7 @@ from fastapi.responses import Response
 import json
 import base64
 import os
+import io
 from pathlib import Path
 from openai import OpenAI
 from elevenlabs.client import ElevenLabs
@@ -172,6 +173,40 @@ async def conversation(
         return {
             "success": True,
             "response": assistant_message,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.post("/api/speech-to-text")
+async def speech_to_text(audio: UploadFile = File(...)):
+    """
+    Convert speech to text using OpenAI Whisper
+
+    Returns transcribed text
+    """
+    try:
+        # Read audio file
+        audio_data = await audio.read()
+
+        # Create a file-like object for OpenAI
+        audio_file = io.BytesIO(audio_data)
+        audio_file.name = "speech.wav"
+
+        # Transcribe with Whisper
+        transcript = openai_client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file
+        )
+
+        return {
+            "success": True,
+            "text": transcript.text,
             "timestamp": datetime.now().isoformat()
         }
 
