@@ -221,19 +221,27 @@ async def speech_to_text(audio: UploadFile = File(...)):
 @app.post("/api/text-to-speech")
 async def text_to_speech(text: str = Form(...)):
     """
-    Convert text to speech using OpenAI TTS
+    Convert text to speech using ElevenLabs
 
     Returns audio file
     """
     try:
-        # Generate speech using OpenAI TTS
-        response = openai_client.audio.speech.create(
-            model="tts-1",
-            voice="alloy",
-            input=text
+        # Generate speech using ElevenLabs
+        voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
+
+        audio_generator = elevenlabs_client.text_to_speech.convert(
+            voice_id=voice_id,
+            text=text,
+            model_id="eleven_turbo_v2_5",
+            voice_settings=VoiceSettings(
+                stability=0.5,
+                similarity_boost=0.8,
+                style=0.6,
+                use_speaker_boost=True
+            )
         )
 
-        audio_bytes = response.content
+        audio_bytes = b"".join(audio_generator)
 
         return Response(
             content=audio_bytes,
@@ -334,18 +342,27 @@ async def process_interaction(
                 conversation_histories[client_id][0]
             ] + conversation_histories[client_id][-19:]
 
-        # Generate speech using OpenAI TTS (cheaper and more reliable than ElevenLabs)
+        # Generate speech using ElevenLabs (much more natural voices!)
         print(f"Generating speech for: {assistant_message[:50]}...")
 
         try:
-            # Use OpenAI TTS instead of ElevenLabs
-            response_audio = openai_client.audio.speech.create(
-                model="tts-1",
-                voice="alloy",  # Options: alloy, echo, fable, onyx, nova, shimmer
-                input=assistant_message
+            # Use ElevenLabs - great for personality and sarcasm
+            # Voice ID for Adam (or use another voice ID from your ElevenLabs account)
+            voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
+
+            audio_generator = elevenlabs_client.text_to_speech.convert(
+                voice_id=voice_id,
+                text=assistant_message,
+                model_id="eleven_turbo_v2_5",  # Faster model
+                voice_settings=VoiceSettings(
+                    stability=0.5,
+                    similarity_boost=0.8,
+                    style=0.6,  # More expressive for sarcasm
+                    use_speaker_boost=True
+                )
             )
 
-            audio_bytes = response_audio.content
+            audio_bytes = b"".join(audio_generator)
             print(f"Generated {len(audio_bytes)} bytes of audio")
 
             # Encode text safely for headers (only ASCII allowed in HTTP headers)
