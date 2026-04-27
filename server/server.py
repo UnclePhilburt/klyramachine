@@ -191,8 +191,10 @@ async def text_to_speech(text: str = Form(...)):
     """
     try:
         # Generate speech
+        # Use ElevenLabs pre-made voice (Adam = pNInz6obpgDQGcFmaJgB)
+        voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
         audio = elevenlabs_client.text_to_speech.convert(
-            voice_id=config.get("elevenlabs_voice", "Adam"),
+            voice_id=voice_id,
             text=text,
             model_id="eleven_multilingual_v2",
             voice_settings=VoiceSettings(
@@ -306,8 +308,10 @@ async def process_interaction(
             ] + conversation_histories[client_id][-19:]
 
         # Generate speech
+        # Use ElevenLabs pre-made voice (Adam = pNInz6obpgDQGcFmaJgB)
+        voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
         audio = elevenlabs_client.text_to_speech.convert(
-            voice_id=config.get("elevenlabs_voice", "Adam"),
+            voice_id=voice_id,
             text=assistant_message,
             model_id="eleven_multilingual_v2",
             voice_settings=VoiceSettings(

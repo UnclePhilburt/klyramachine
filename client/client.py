@@ -170,11 +170,19 @@ class KlyraClient:
         if response:
             # Get response text from header
             response_text = response.headers.get("X-Response-Text", "")
-            print(f"Klyra: {response_text}")
 
-            # Play audio response
-            audio_data = response.content
-            self.play_audio(audio_data)
+            if response_text:
+                print(f"Klyra: {response_text}")
+            else:
+                print("Klyra: [No text response received]")
+
+            # Try to play audio response
+            if len(response.content) > 0:
+                try:
+                    audio_data = response.content
+                    self.play_audio(audio_data)
+                except Exception as e:
+                    print(f"(Audio playback failed, but text response shown above)")
 
             return response_text
         else:
