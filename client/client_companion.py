@@ -97,8 +97,8 @@ class CompanionClient:
         """Check if audio chunk has speech"""
         audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
         volume = np.abs(audio_data).mean()
-        # Increased threshold to reduce false positives
-        return volume > 1000
+        # Increased threshold to reduce false positives from microphone glitches
+        return volume > 1500
 
     def check_if_user_speaking(self):
         """Quick check if user is currently speaking - non-blocking"""
@@ -423,6 +423,11 @@ class CompanionClient:
 
     def listen_for_wake_word(self):
         """Listen for wake word with speech detection"""
+        # Don't listen while Klyra is speaking
+        if hasattr(self, 'is_speaking') and self.is_speaking:
+            time.sleep(0.1)
+            return False
+
         audio_data = self.record_with_speech_detection(duration=2)
 
         if not audio_data:
@@ -436,6 +441,11 @@ class CompanionClient:
             return False
 
         print(f"   Heard: '{text}'")
+
+        # Detect hallucination bug - if text is too repetitive or too long, ignore it
+        if len(text) > 300 or text.count("hey buddy") > 3:
+            print("   ⚠️  Ignoring (likely microphone glitch)")
+            return False
 
         text_clean = text.replace(",", "").replace(".", "").replace("!", "").replace("?", "")
 
