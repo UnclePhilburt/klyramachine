@@ -24,11 +24,20 @@ log_info "Timestamp: $(date)"
 
 # Get the current directory (absolute path)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# Get the parent directory (normalized absolute path)
-PARENT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
-
 log_info "Script directory: $SCRIPT_DIR"
+
+# Get the parent directory (normalized absolute path) - MUST be absolute, no relative paths
+PARENT_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
 log_info "Parent directory: $PARENT_DIR"
+
+# Verify PARENT_DIR is absolute (starts with /)
+if [[ ! "$PARENT_DIR" =~ ^/ ]]; then
+    log_error "PARENT_DIR is not absolute: $PARENT_DIR"
+    log_info "Attempting to resolve..."
+    PARENT_DIR="$(realpath "$SCRIPT_DIR/..")"
+    log_info "Resolved to: $PARENT_DIR"
+fi
+
 log_info "Current user: $USER"
 log_info "Home directory: $HOME"
 
@@ -141,8 +150,13 @@ fi
 if command -v systemctl &> /dev/null; then
     log_info "systemd detected, creating auto-update service..."
 
-    # Create auto-update service file
+    # Remove old service files if they exist (to avoid cached errors)
     UPDATE_SERVICE="/etc/systemd/system/klyra-update.service"
+    if [ -f "$UPDATE_SERVICE" ]; then
+        log_info "Removing old service file..."
+        sudo rm -f "$UPDATE_SERVICE"
+    fi
+
     log_info "Creating auto-update service: $UPDATE_SERVICE"
     sudo tee $UPDATE_SERVICE > /dev/null <<SERVICEEOF
 [Unit]
@@ -179,8 +193,13 @@ SERVICEEOF
         log_error "Auto-update service file not found at $UPDATE_SERVICE"
         log_info "Skipping timer creation"
     else
-        # Create auto-update timer file
+        # Remove old timer file if it exists
         UPDATE_TIMER="/etc/systemd/system/klyra-update.timer"
+        if [ -f "$UPDATE_TIMER" ]; then
+            log_info "Removing old timer file..."
+            sudo rm -f "$UPDATE_TIMER"
+        fi
+
         log_info "Creating auto-update timer: $UPDATE_TIMER"
         sudo tee $UPDATE_TIMER > /dev/null <<TIMEREOF
 [Unit]
@@ -389,10 +408,10 @@ log_info "Verifying auto-update system..."
 if systemctl is-enabled klyra-update.timer &>/dev/null && systemctl is-active klyra-update.timer &>/dev/null; then
     log_success "Auto-update: ENABLED via systemd timer"
     sudo systemctl list-timers klyra-update.timer --no-pager | grep klyra-update || true
-elif crontab -l 2>/dev/null | grep -q "klyra-update.sh"; then
+elif crontab -l 2>/dev/null | grep -q "auto_update.sh"; then
     log_success "Auto-update: ENABLED via cron"
     log_info "Cron job:"
-    crontab -l | grep "klyra-update.sh"
+    crontab -l | grep "auto_update.sh"
 else
     log_error "AUTO-UPDATE NOT WORKING!"
     log_error "This is CRITICAL - installation cannot continue"
