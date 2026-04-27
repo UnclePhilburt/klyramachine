@@ -55,8 +55,34 @@ elevenlabs_client = ElevenLabs(api_key=config["elevenlabs_api_key"])
 # Initialize FastAPI
 app = FastAPI(title="Klyra Machine Server")
 
-# Store conversation history per client
+# Conversation storage directory
+CONVERSATIONS_DIR = Path(__file__).parent / "conversations"
+CONVERSATIONS_DIR.mkdir(exist_ok=True)
+
+# Store conversation history per client (in-memory cache)
 conversation_histories = {}
+
+
+def load_conversation(client_id):
+    """Load conversation history from disk"""
+    conversation_file = CONVERSATIONS_DIR / f"{client_id}.json"
+    if conversation_file.exists():
+        try:
+            with open(conversation_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading conversation for {client_id}: {e}")
+    return None
+
+
+def save_conversation(client_id, history):
+    """Save conversation history to disk"""
+    conversation_file = CONVERSATIONS_DIR / f"{client_id}.json"
+    try:
+        with open(conversation_file, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving conversation for {client_id}: {e}")
 
 
 @app.get("/")
@@ -130,11 +156,17 @@ async def conversation(
         scene_context: Optional description of what the camera sees
     """
     try:
-        # Initialize conversation history for new clients
+        # Load conversation history from disk or initialize new
         if client_id not in conversation_histories:
-            conversation_histories[client_id] = [
-                {"role": "system", "content": config["system_prompt"]}
-            ]
+            loaded_history = load_conversation(client_id)
+            if loaded_history:
+                conversation_histories[client_id] = loaded_history
+                print(f"Loaded existing conversation for {client_id}")
+            else:
+                conversation_histories[client_id] = [
+                    {"role": "system", "content": config["system_prompt"]}
+                ]
+                print(f"Started new conversation for {client_id}")
 
         # Add user message with scene context inline (don't clutter history with system messages)
         if scene_context:
@@ -170,6 +202,9 @@ async def conversation(
             conversation_histories[client_id] = [
                 conversation_histories[client_id][0]
             ] + conversation_histories[client_id][-49:]
+
+        # Save conversation to disk
+        save_conversation(client_id, conversation_histories[client_id])
 
         return {
             "success": True,
@@ -304,11 +339,17 @@ async def process_interaction(
             )
             scene_context = vision_response.choices[0].message.content
 
-        # Initialize conversation history for new clients
+        # Load conversation history from disk or initialize new
         if client_id not in conversation_histories:
-            conversation_histories[client_id] = [
-                {"role": "system", "content": config["system_prompt"]}
-            ]
+            loaded_history = load_conversation(client_id)
+            if loaded_history:
+                conversation_histories[client_id] = loaded_history
+                print(f"Loaded existing conversation for {client_id}")
+            else:
+                conversation_histories[client_id] = [
+                    {"role": "system", "content": config["system_prompt"]}
+                ]
+                print(f"Started new conversation for {client_id}")
 
         # Add user message with scene context inline (better for conversation continuity)
         if scene_context:
@@ -343,6 +384,9 @@ async def process_interaction(
             conversation_histories[client_id] = [
                 conversation_histories[client_id][0]
             ] + conversation_histories[client_id][-49:]
+
+        # Save conversation to disk
+        save_conversation(client_id, conversation_histories[client_id])
 
         # Generate speech using ElevenLabs (much more natural voices!)
         print(f"Generating speech for: {assistant_message[:50]}...")

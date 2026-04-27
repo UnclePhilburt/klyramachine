@@ -44,5 +44,8 @@ test_capture.jpg
 *.wav
 *.mp3
 
+# Conversation storage
+server/conversations/
+
 # Logs
 *.log
