@@ -130,17 +130,43 @@ def get_realtime_info(query, location=None):
             query_with_location = query
 
         # Use Gemini with Google Search grounding for real-time info
+        # Note: You need to enable Google Search in your Gemini API settings
         response = gemini_model.generate_content(
             query_with_location,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.3,
                 max_output_tokens=200
-            )
+            ),
+            # Enable Google Search grounding (requires Gemini API with search enabled)
+            tools=[{"google_search_retrieval": {}}] if hasattr(genai, 'tools') else None
         )
         return response.text
     except Exception as e:
-        print(f"Error getting realtime info: {e}")
+        print(f"Error getting realtime info from Gemini: {e}")
+        # Try fallback weather API for weather-specific queries
+        if any(word in query.lower() for word in ['weather', 'temperature', 'rain', 'forecast']):
+            return get_weather_fallback(location)
         return None
+
+
+def get_weather_fallback(location=None):
+    """Fallback weather API using wttr.in (free, no API key needed)"""
+    try:
+        if location:
+            # Try to extract just city name
+            city = location.split(',')[0].strip()
+        else:
+            city = ""
+
+        # wttr.in is a free weather service
+        url = f"https://wttr.in/{city}?format=%C+%t+%h+%w"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            weather_data = response.text.strip()
+            return f"Current weather in {location if location else 'your area'}: {weather_data}"
+    except Exception as e:
+        print(f"Weather fallback error: {e}")
+    return None
 
 
 @app.get("/")

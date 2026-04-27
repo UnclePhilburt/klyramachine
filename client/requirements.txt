@@ -17,5 +17,8 @@ numpy>=1.24.0
 # Raspberry Pi camera (uncomment if using Pi camera module)
 # picamera2>=0.3.0
 
+# Wake word detection
+pvporcupine>=3.0.0
+
 # Configuration
 python-dotenv>=1.0.0
