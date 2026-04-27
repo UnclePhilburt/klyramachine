@@ -66,8 +66,8 @@ echo ""
 echo "Server URL: https://klyramachine.onrender.com"
 read -p "Change server URL? (press Enter to keep default, or type new URL): " new_url
 if [ ! -z "$new_url" ]; then
-    # Update server URL in config.json
-    python3 -c "import json; f=open('config.json','r+'); data=json.load(f); data['server_url']='$new_url'; f.seek(0); json.dump(data,f,indent=4); f.truncate()"
+    # Update server URL in config.json using sed
+    sed -i "s|\"server_url\": \".*\"|\"server_url\": \"$new_url\"|g" config.json
     echo "✓ Server URL updated"
 fi
 
