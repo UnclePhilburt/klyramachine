@@ -59,7 +59,8 @@ elevenlabs_client = ElevenLabs(api_key=config["elevenlabs_api_key"])
 # Initialize Gemini (if API key provided)
 if config.get("gemini_api_key"):
     genai.configure(api_key=config["gemini_api_key"])
-    gemini_model = genai.GenerativeModel('gemini-pro')
+    # Use gemini-1.5-flash for real-time info (fast and current)
+    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     gemini_model = None
 
@@ -129,16 +130,14 @@ def get_realtime_info(query, location=None):
         else:
             query_with_location = query
 
-        # Use Gemini with Google Search grounding for real-time info
-        # Note: You need to enable Google Search in your Gemini API settings
+        # Use Gemini for real-time info
+        # Gemini 1.5 models have more recent training data
         response = gemini_model.generate_content(
             query_with_location,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.3,
                 max_output_tokens=200
-            ),
-            # Enable Google Search grounding (requires Gemini API with search enabled)
-            tools=[{"google_search_retrieval": {}}] if hasattr(genai, 'tools') else None
+            )
         )
         return response.text
     except Exception as e:
