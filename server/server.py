@@ -459,27 +459,28 @@ async def process_interaction(
             image_data = await image.read()
             image_base64 = base64.b64encode(image_data).decode('utf-8')
 
-            # Get scene description
+            # Get scene description (using gpt-4o-mini for faster vision)
             vision_response = openai_client.chat.completions.create(
-                model=config.get("gpt_model", "gpt-4o"),
+                model="gpt-4o-mini",  # Faster and cheaper for vision
                 messages=[
                     {
                         "role": "user",
                         "content": [
                             {
                                 "type": "text",
-                                "text": "Briefly describe what you see. Keep it very concise."
+                                "text": "In 1-2 sentences, what do you see?"
                             },
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                    "url": f"data:image/jpeg;base64,{image_base64}",
+                                    "detail": "low"  # Low detail = faster processing
                                 }
                             }
                         ]
                     }
                 ],
-                max_tokens=150
+                max_tokens=100  # Reduced tokens for faster response
             )
             scene_context = vision_response.choices[0].message.content
 
@@ -506,25 +507,12 @@ async def process_interaction(
             "content": user_message_with_context
         })
 
-        # Use OpenAI to intelligently detect if real-time info is needed
+        # Use simple keyword detection instead of GPT call (much faster!)
         if gemini_model:
-            detection_response = openai_client.chat.completions.create(
-                model="gpt-4o-mini",  # Use cheaper/faster model for detection
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Determine if this question requires real-time information like weather, news, current events, sports scores, stock prices, or anything happening right now. Respond with only 'YES' or 'NO'."
-                    },
-                    {
-                        "role": "user",
-                        "content": user_message
-                    }
-                ],
-                max_tokens=5,
-                temperature=0
-            )
-
-            needs_realtime = detection_response.choices[0].message.content.strip().upper() == "YES"
+            # Check for weather/realtime keywords
+            realtime_keywords = ['weather', 'temperature', 'forecast', 'rain', 'snow', 'hot', 'cold',
+                               'news', 'today', 'current', 'now', 'latest', 'score', 'stock', 'price']
+            needs_realtime = any(keyword in user_message.lower() for keyword in realtime_keywords)
 
             if needs_realtime:
                 # Get user's location
@@ -543,11 +531,11 @@ async def process_interaction(
                     })
                     print(f"✓ Got real-time info: {realtime_info[:100]}...")
 
-        # Get conversation response
+        # Get conversation response (using gpt-4o-mini for 2x faster responses)
         response = openai_client.chat.completions.create(
-            model=config.get("gpt_model", "gpt-4o"),
+            model="gpt-4o-mini",  # Much faster than gpt-4o, good enough for conversation
             messages=conversation_histories[client_id],
-            max_tokens=200,
+            max_tokens=150,  # Shorter responses = faster TTS
             temperature=0.8
         )
 

@@ -238,7 +238,10 @@ class ImprovedWakeWordClient:
         """Send command to Klyra"""
         print(f"You: {text}")
 
-        image_data = self.capture_image()
+        # Only capture image if camera is enabled (for faster responses)
+        image_data = None
+        if self.config.get("enable_camera", False):
+            image_data = self.capture_image()
 
         print("💭 Thinking...")
         data = {"client_id": self.client_id, "user_message": text}
