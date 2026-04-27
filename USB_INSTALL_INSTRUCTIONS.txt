@@ -1,0 +1,95 @@
+==================================================
+   KLYRA MACHINE - USB INSTALLATION GUIDE
+==================================================
+
+WHAT YOU NEED:
+- USB flash drive
+- Raspberry Pi (or any computer with Python)
+- Webcam and microphone
+
+==================================================
+STEP 1: COPY TO USB
+==================================================
+
+Copy the entire "klyramachine" folder to your USB drive.
+
+==================================================
+STEP 2: ON RASPBERRY PI
+==================================================
+
+1. Plug in the USB drive
+
+2. Copy the folder to your home directory:
+   cp -r /media/pi/USB_DRIVE_NAME/klyramachine ~/
+
+3. Install Python dependencies:
+   cd ~/klyramachine/client
+   pip3 install -r requirements.txt
+
+4. Double-click START_KLYRA.py
+   OR run in terminal:
+   python3 ~/klyramachine/START_KLYRA.py
+
+==================================================
+STEP 3: START TALKING!
+==================================================
+
+Say: "HEY BUDDY, what's up?"
+
+Klyra will respond!
+
+==================================================
+WINDOWS INSTALLATION
+==================================================
+
+1. Copy "klyramachine" folder anywhere on your computer
+
+2. Install Python dependencies:
+   - Open Command Prompt
+   - cd to klyramachine\client
+   - Run: pip install -r requirements.txt
+
+3. Double-click START_KLYRA.bat
+   OR double-click START_KLYRA.py
+
+==================================================
+AUTO-START ON RASPBERRY PI (OPTIONAL)
+==================================================
+
+To make Klyra start automatically on boot:
+
+cd ~/klyramachine/client
+chmod +x install_service.sh
+./install_service.sh
+
+Answer "yes" when asked about security lockdown.
+
+Then:
+sudo systemctl start klyra
+
+Done! Klyra will now start automatically every time
+the Raspberry Pi boots up.
+
+==================================================
+TROUBLESHOOTING
+==================================================
+
+Camera not working?
+- Check config.json in client folder
+- Try changing "camera_index" to 0 or 1
+
+Microphone not working?
+- Run: python3 client/test_mic.py
+- Check which microphone is being used
+
+Server offline?
+- The server runs at: https://klyramachine.onrender.com
+- Check if it's online by visiting that URL
+
+==================================================
+QUESTIONS?
+==================================================
+
+Contact: [Your contact info]
+
+Enjoy your AI buddy! 🤖
