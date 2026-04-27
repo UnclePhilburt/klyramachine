@@ -227,7 +227,7 @@ async def text_to_speech(text: str = Form(...)):
     """
     try:
         # Generate speech using ElevenLabs
-        voice_id = config.get("elevenlabs_voice", "NNl6r8mD7vthiJatiJt1")
+        voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
 
         audio_generator = elevenlabs_client.text_to_speech.convert(
             voice_id=voice_id,
@@ -347,8 +347,7 @@ async def process_interaction(
 
         try:
             # Use ElevenLabs - great for personality and sarcasm
-            # Voice ID for Bradford
-            voice_id = config.get("elevenlabs_voice", "NNl6r8mD7vthiJatiJt1")
+            voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
 
             audio_generator = elevenlabs_client.text_to_speech.convert(
                 voice_id=voice_id,
