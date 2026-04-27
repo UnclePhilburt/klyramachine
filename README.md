@@ -42,7 +42,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 cd client
 pip install -r requirements.txt
 copy config.example.json config.json
-# Edit config.json with your Render server URL
+# Server URL is already set to https://klyramachine.onrender.com
 python client.py
 ```
 

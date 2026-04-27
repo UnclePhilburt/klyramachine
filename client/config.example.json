@@ -1,5 +1,5 @@
 {
-  "server_url": "http://your-server-ip:8000",
+  "server_url": "https://klyramachine.onrender.com",
   "client_id": "klyra_client_001",
   "camera_index": 0,
   "vision_check_interval": 10,
