@@ -89,14 +89,27 @@ log_info "  - portaudio19-dev (audio library)"
 log_info "  - python3-opencv (camera/vision)"
 log_info "  - python3-scipy (scientific computing)"
 log_info "  - python3-numpy (numerical arrays)"
-log_info "  - libatlas-base-dev (linear algebra for OpenCV)"
-log_info "  - libopenblas-dev (optimized BLAS for Raspberry Pi)"
 
-if sudo apt install -y git python3-pip python3-venv python3-dev build-essential python3-pyaudio portaudio19-dev python3-opencv python3-scipy python3-numpy libatlas-base-dev libopenblas-dev; then
-    log_success "All system dependencies installed"
+# Install core packages first
+if sudo apt install -y git python3-pip python3-venv python3-dev build-essential python3-pyaudio portaudio19-dev python3-opencv python3-scipy python3-numpy; then
+    log_success "Core system dependencies installed"
 else
-    log_error "Failed to install system dependencies"
+    log_error "Failed to install core system dependencies"
     exit 1
+fi
+
+# Try to install optional OpenCV dependencies (may not exist on all Pi versions)
+log_info "Installing optional OpenCV dependencies..."
+if sudo apt install -y libatlas-base-dev 2>/dev/null; then
+    log_success "libatlas-base-dev installed"
+else
+    log_warning "libatlas-base-dev not available (optional)"
+fi
+
+if sudo apt install -y libopenblas-dev 2>/dev/null; then
+    log_success "libopenblas-dev installed"
+else
+    log_warning "libopenblas-dev not available (optional)"
 fi
 
 # Verify key installations
