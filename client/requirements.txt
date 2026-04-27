@@ -12,7 +12,7 @@ pygame>=2.5.0
 # Audio processing and noise reduction
 scipy>=1.11.0
 numpy>=1.24.0
-webrtcvad>=2.0.10
+# webrtcvad>=2.0.10  # Optional - commented out because it requires C++ compilation
 
 # Raspberry Pi camera (uncomment if using Pi camera module)
 # picamera2>=0.3.0
