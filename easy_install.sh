@@ -43,6 +43,9 @@ echo "📦 Step 3: Installing Python dependencies..."
 # Try with --break-system-packages flag (needed for newer Raspberry Pi OS)
 pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt --user
 
+# Note: webrtcvad might fail to build on some systems, but the client will still work
+echo "   (If webrtcvad fails to install, that's okay - the client will use fallback speech detection)"
+
 echo ""
 echo "⚙️  Step 4: Configuration"
 echo ""
