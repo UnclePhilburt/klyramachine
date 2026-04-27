@@ -220,28 +220,19 @@ async def speech_to_text(audio: UploadFile = File(...)):
 @app.post("/api/text-to-speech")
 async def text_to_speech(text: str = Form(...)):
     """
-    Convert text to speech using ElevenLabs
+    Convert text to speech using OpenAI TTS
 
     Returns audio file
     """
     try:
-        # Generate speech
-        # Use ElevenLabs pre-made voice (Adam = pNInz6obpgDQGcFmaJgB)
-        voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
-        audio = elevenlabs_client.text_to_speech.convert(
-            voice_id=voice_id,
-            text=text,
-            model_id="eleven_multilingual_v2",
-            voice_settings=VoiceSettings(
-                stability=0.5,
-                similarity_boost=0.75,
-                style=0.0,
-                use_speaker_boost=True
-            )
+        # Generate speech using OpenAI TTS
+        response = openai_client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=text
         )
 
-        # Collect audio chunks
-        audio_bytes = b"".join(audio)
+        audio_bytes = response.content
 
         return Response(
             content=audio_bytes,
@@ -342,26 +333,18 @@ async def process_interaction(
                 conversation_histories[client_id][0]
             ] + conversation_histories[client_id][-19:]
 
-        # Generate speech
-        # Use ElevenLabs pre-made voice (Adam = pNInz6obpgDQGcFmaJgB)
-        voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
-
+        # Generate speech using OpenAI TTS (cheaper and more reliable than ElevenLabs)
         print(f"Generating speech for: {assistant_message[:50]}...")
 
         try:
-            audio = elevenlabs_client.text_to_speech.convert(
-                voice_id=voice_id,
-                text=assistant_message,
-                model_id="eleven_multilingual_v2",
-                voice_settings=VoiceSettings(
-                    stability=0.5,
-                    similarity_boost=0.75,
-                    style=0.0,
-                    use_speaker_boost=True
-                )
+            # Use OpenAI TTS instead of ElevenLabs
+            response_audio = openai_client.audio.speech.create(
+                model="tts-1",
+                voice="alloy",  # Options: alloy, echo, fable, onyx, nova, shimmer
+                input=assistant_message
             )
 
-            audio_bytes = b"".join(audio)
+            audio_bytes = response_audio.content
             print(f"Generated {len(audio_bytes)} bytes of audio")
 
             return Response(
