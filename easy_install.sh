@@ -40,7 +40,8 @@ cd "$INSTALL_DIR/client"
 
 echo ""
 echo "📦 Step 3: Installing Python dependencies..."
-pip3 install -r requirements.txt
+# Try with --break-system-packages flag (needed for newer Raspberry Pi OS)
+pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt --user
 
 echo ""
 echo "⚙️  Step 4: Configuration"
