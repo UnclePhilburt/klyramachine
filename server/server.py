@@ -345,31 +345,49 @@ async def process_interaction(
         # Generate speech
         # Use ElevenLabs pre-made voice (Adam = pNInz6obpgDQGcFmaJgB)
         voice_id = config.get("elevenlabs_voice", "pNInz6obpgDQGcFmaJgB")
-        audio = elevenlabs_client.text_to_speech.convert(
-            voice_id=voice_id,
-            text=assistant_message,
-            model_id="eleven_multilingual_v2",
-            voice_settings=VoiceSettings(
-                stability=0.5,
-                similarity_boost=0.75,
-                style=0.0,
-                use_speaker_boost=True
+
+        print(f"Generating speech for: {assistant_message[:50]}...")
+
+        try:
+            audio = elevenlabs_client.text_to_speech.convert(
+                voice_id=voice_id,
+                text=assistant_message,
+                model_id="eleven_multilingual_v2",
+                voice_settings=VoiceSettings(
+                    stability=0.5,
+                    similarity_boost=0.75,
+                    style=0.0,
+                    use_speaker_boost=True
+                )
             )
-        )
 
-        audio_bytes = b"".join(audio)
+            audio_bytes = b"".join(audio)
+            print(f"Generated {len(audio_bytes)} bytes of audio")
 
-        return Response(
-            content=audio_bytes,
-            media_type="audio/mpeg",
-            headers={
-                "X-Response-Text": assistant_message,
-                "X-Scene-Context": scene_context or "",
-                "Content-Disposition": "attachment; filename=response.mp3"
-            }
-        )
+            return Response(
+                content=audio_bytes,
+                media_type="audio/mpeg",
+                headers={
+                    "X-Response-Text": assistant_message,
+                    "X-Scene-Context": scene_context or "",
+                    "Content-Disposition": "attachment; filename=response.mp3"
+                }
+            )
+        except Exception as tts_error:
+            print(f"TTS Error: {tts_error}")
+            # Return response with text but no audio
+            return Response(
+                content=b"",
+                media_type="text/plain",
+                headers={
+                    "X-Response-Text": assistant_message,
+                    "X-Scene-Context": scene_context or "",
+                    "X-TTS-Error": str(tts_error)
+                }
+            )
 
     except Exception as e:
+        print(f"Error in process_interaction: {e}")
         return {
             "success": False,
             "error": str(e)
