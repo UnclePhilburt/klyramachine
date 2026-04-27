@@ -393,20 +393,37 @@ async def process_interaction(
             "content": user_message_with_context
         })
 
-        # Check if user is asking for real-time info (weather, news, etc.)
-        realtime_keywords = ["weather", "temperature", "forecast", "news", "current", "today", "now"]
-        needs_realtime = any(keyword in user_message.lower() for keyword in realtime_keywords)
+        # Use OpenAI to intelligently detect if real-time info is needed
+        if gemini_model:
+            detection_response = openai_client.chat.completions.create(
+                model="gpt-4o-mini",  # Use cheaper/faster model for detection
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Determine if this question requires real-time information like weather, news, current events, sports scores, stock prices, or anything happening right now. Respond with only 'YES' or 'NO'."
+                    },
+                    {
+                        "role": "user",
+                        "content": user_message
+                    }
+                ],
+                max_tokens=5,
+                temperature=0
+            )
 
-        if needs_realtime and gemini_model:
-            # Get real-time info from Gemini
-            print(f"Fetching real-time info for: {user_message}")
-            realtime_info = get_realtime_info(user_message)
-            if realtime_info:
-                # Inject real-time info as context
-                conversation_histories[client_id].append({
-                    "role": "system",
-                    "content": f"[Real-time info: {realtime_info}]"
-                })
+            needs_realtime = detection_response.choices[0].message.content.strip().upper() == "YES"
+
+            if needs_realtime:
+                # Get real-time info from Gemini
+                print(f"🌐 Fetching real-time info for: {user_message}")
+                realtime_info = get_realtime_info(user_message)
+                if realtime_info:
+                    # Inject real-time info as context
+                    conversation_histories[client_id].append({
+                        "role": "system",
+                        "content": f"[Real-time info: {realtime_info}]"
+                    })
+                    print(f"✓ Got real-time info: {realtime_info[:100]}...")
 
         # Get conversation response
         response = openai_client.chat.completions.create(
