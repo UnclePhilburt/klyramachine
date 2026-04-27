@@ -220,9 +220,9 @@ TIMEREOF
         systemd-analyze verify $UPDATE_SERVICE 2>&1 || true
     fi
 
-    # Try to enable timer (don't fail installation if this doesn't work)
+    # Try to enable timer - THIS IS MANDATORY
     echo ""
-    log_info "Enabling auto-update timer (optional feature)..."
+    log_info "Enabling auto-update timer (REQUIRED)..."
 
     TIMER_ENABLE_OUTPUT=$(sudo systemctl enable klyra-update.timer 2>&1)
     TIMER_ENABLE_STATUS=$?
@@ -244,21 +244,51 @@ TIMEREOF
             echo ""
             log_info "Timer schedule:"
             sudo systemctl list-timers klyra-update.timer --no-pager || true
+            AUTO_UPDATE_WORKING=true
         else
-            log_warning "Timer failed to start (non-critical)"
+            log_error "Systemd timer failed to start!"
             log_info "Error output:"
             echo "$TIMER_START_OUTPUT"
-            log_info "Checking journal for more details..."
+            log_info "Checking journal for details..."
             sudo journalctl -u klyra-update.timer -n 20 --no-pager 2>&1 || true
-            echo ""
-            log_info "You can manually update with: cd $SCRIPT_DIR/.. && git pull"
+            AUTO_UPDATE_WORKING=false
         fi
     else
-        log_warning "Timer failed to enable (non-critical)"
+        log_error "Systemd timer failed to enable!"
         log_info "Error output:"
         echo "$TIMER_ENABLE_OUTPUT"
-        log_info "This is optional - Klyra will still work without auto-updates"
-        log_info "You can manually update with: cd $SCRIPT_DIR/.. && git pull"
+        AUTO_UPDATE_WORKING=false
+    fi
+
+    # If systemd timer failed, fall back to cron (MANDATORY AUTO-UPDATE)
+    if [ "$AUTO_UPDATE_WORKING" != "true" ]; then
+        echo ""
+        log_warning "Systemd timer failed - falling back to cron..."
+        log_info "Installing cron-based auto-update (runs every hour)..."
+
+        # Create cron job
+        CRON_JOB="0 * * * * cd $SCRIPT_DIR/.. && $SCRIPT_DIR/auto_update.sh >> /tmp/klyra-update.log 2>&1"
+
+        # Add to crontab if not already there
+        (crontab -l 2>/dev/null | grep -v "klyra-update.sh" ; echo "$CRON_JOB") | crontab -
+
+        if [ $? -eq 0 ]; then
+            log_success "Cron-based auto-update installed!"
+            log_info "Updates will run every hour via cron"
+            log_info "Cron job added:"
+            echo "  $CRON_JOB"
+            log_info "Check logs: tail -f /tmp/klyra-update.log"
+            AUTO_UPDATE_WORKING=true
+        else
+            log_error "Failed to install cron fallback!"
+            log_error "AUTO-UPDATE IS CRITICAL - PLEASE FIX MANUALLY"
+            echo ""
+            log_info "Manual setup required:"
+            log_info "1. Run: crontab -e"
+            log_info "2. Add this line:"
+            echo "   $CRON_JOB"
+            exit 1
+        fi
     fi
 else
     log_warning "systemd not available, skipping auto-update timer"
@@ -335,6 +365,30 @@ else
 fi
 
 echo ""
+log_info "=========================================="
+log_info "FINAL VERIFICATION"
+log_info "=========================================="
+echo ""
+
+# Verify auto-update is actually working
+log_info "Verifying auto-update system..."
+if systemctl is-enabled klyra-update.timer &>/dev/null && systemctl is-active klyra-update.timer &>/dev/null; then
+    log_success "Auto-update: ENABLED via systemd timer"
+    sudo systemctl list-timers klyra-update.timer --no-pager | grep klyra-update || true
+elif crontab -l 2>/dev/null | grep -q "klyra-update.sh"; then
+    log_success "Auto-update: ENABLED via cron"
+    log_info "Cron job:"
+    crontab -l | grep "klyra-update.sh"
+else
+    log_error "AUTO-UPDATE NOT WORKING!"
+    log_error "This is CRITICAL - installation cannot continue"
+    exit 1
+fi
+
+echo ""
+log_success "Auto-update verification PASSED!"
+echo ""
+
 echo "Commands:"
 echo "  Start:   sudo systemctl start klyra"
 echo "  Stop:    sudo systemctl stop klyra"
@@ -344,8 +398,13 @@ echo "  Logs:    sudo journalctl -u klyra -f"
 echo ""
 echo "Auto-update:"
 echo "  Manual update: cd $SCRIPT_DIR/.. && ./client/auto_update.sh"
-echo "  Update logs:   sudo journalctl -u klyra-update -f"
-echo "  Update status: sudo systemctl status klyra-update.timer"
+if systemctl is-active klyra-update.timer &>/dev/null; then
+    echo "  Update logs:   sudo journalctl -u klyra-update -f"
+    echo "  Update status: sudo systemctl status klyra-update.timer"
+else
+    echo "  Update logs:   tail -f /tmp/klyra-update.log"
+    echo "  Cron status:   crontab -l | grep klyra"
+fi
 echo ""
 if [ "$lockdown_choice" = "yes" ] || [ "$lockdown_choice" = "y" ]; then
     echo "Security:"
