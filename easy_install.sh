@@ -2,118 +2,316 @@
 # Easy Installer for Klyra Machine
 # One-click setup for Raspberry Pi
 
+set -e  # Exit on error
+# set -x  # Uncomment for extreme debugging (shows every command)
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[OK]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_step() {
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}$1${NC}"
+    echo -e "${GREEN}========================================${NC}"
+}
+
 echo "=========================================="
 echo "   KLYRA MACHINE - EASY INSTALLER"
+echo "   (Verbose Debug Mode)"
 echo "=========================================="
 echo ""
 
+log_info "Installer started at: $(date)"
+log_info "Running as user: $USER"
+log_info "Home directory: $HOME"
+log_info "Current directory: $(pwd)"
+log_info "OS Type: $OSTYPE"
+
 # Check if running on Raspberry Pi or Linux
 if [[ ! "$OSTYPE" == "linux-gnu"* ]]; then
-    echo "[ERROR] This installer is for Linux/Raspberry Pi only"
-    echo "   For Windows, see the client folder for manual setup"
+    log_error "This installer is for Linux/Raspberry Pi only"
+    log_info "For Windows, see the client folder for manual setup"
     exit 1
+fi
+
+log_success "OS check passed"
+
+# Detect Raspberry Pi
+if [ -f /proc/device-tree/model ]; then
+    PI_MODEL=$(cat /proc/device-tree/model)
+    log_info "Detected: $PI_MODEL"
+else
+    log_info "Running on generic Linux system"
 fi
 
 # Get current directory
 INSTALL_DIR="$HOME/klyramachine"
+log_info "Installation directory: $INSTALL_DIR"
 
-echo "Step 1: Installing system dependencies..."
-sudo apt update
-sudo apt install -y git python3-pip python3-venv python3-dev build-essential python3-pyaudio portaudio19-dev python3-opencv python3-scipy python3-numpy
+log_step "STEP 1: Installing System Dependencies"
+log_info "Updating package lists..."
+if sudo apt update; then
+    log_success "Package lists updated"
+else
+    log_error "Failed to update package lists"
+    exit 1
+fi
 
-echo ""
-echo "Step 2: Downloading Klyra Machine..."
+log_info "Installing required packages..."
+log_info "  - git (version control)"
+log_info "  - python3-pip (Python package manager)"
+log_info "  - python3-venv (virtual environments)"
+log_info "  - python3-dev (Python development headers)"
+log_info "  - build-essential (compiler tools)"
+log_info "  - python3-pyaudio (audio input/output)"
+log_info "  - portaudio19-dev (audio library)"
+log_info "  - python3-opencv (camera/vision)"
+log_info "  - python3-scipy (scientific computing)"
+log_info "  - python3-numpy (numerical arrays)"
+
+if sudo apt install -y git python3-pip python3-venv python3-dev build-essential python3-pyaudio portaudio19-dev python3-opencv python3-scipy python3-numpy; then
+    log_success "All system dependencies installed"
+else
+    log_error "Failed to install system dependencies"
+    exit 1
+fi
+
+# Verify key installations
+log_info "Verifying installations..."
+git --version && log_success "git installed: $(git --version)"
+python3 --version && log_success "python3 installed: $(python3 --version)"
+pip3 --version && log_success "pip3 installed: $(pip3 --version)"
+
+log_step "STEP 2: Downloading Klyra Machine"
 
 if [ -d "$INSTALL_DIR" ]; then
-    echo "[WARNING] Klyra already exists at $INSTALL_DIR"
+    log_warning "Klyra already exists at $INSTALL_DIR"
+    log_info "Directory contents:"
+    ls -lah "$INSTALL_DIR" | head -10
+
     read -p "Delete and reinstall? (yes/no): " reinstall
     if [ "$reinstall" = "yes" ]; then
+        log_info "Removing existing installation..."
         rm -rf "$INSTALL_DIR"
+        log_success "Old installation removed"
     else
-        echo "Installation cancelled."
+        log_info "Installation cancelled by user"
         exit 0
     fi
 fi
 
-git clone https://github.com/UnclePhilburt/klyramachine.git "$INSTALL_DIR"
-cd "$INSTALL_DIR/client"
+log_info "Cloning from GitHub: https://github.com/UnclePhilburt/klyramachine.git"
+if git clone https://github.com/UnclePhilburt/klyramachine.git "$INSTALL_DIR"; then
+    log_success "Repository cloned successfully"
+    log_info "Repository size: $(du -sh $INSTALL_DIR | cut -f1)"
+else
+    log_error "Failed to clone repository"
+    log_info "Check your internet connection and try again"
+    exit 1
+fi
 
-echo ""
-echo "Step 3: Setting up Python environment..."
+log_info "Changing to client directory: $INSTALL_DIR/client"
+cd "$INSTALL_DIR/client"
+log_info "Current directory: $(pwd)"
+log_info "Files in client directory:"
+ls -lah | head -15
+
+log_step "STEP 3: Setting up Python Environment"
 
 # Create virtual environment
 if [ ! -d "venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv venv --system-site-packages
+    log_info "Creating virtual environment..."
+    log_info "Command: python3 -m venv venv --system-site-packages"
+
+    if python3 -m venv venv --system-site-packages; then
+        log_success "Virtual environment created"
+        log_info "venv size: $(du -sh venv | cut -f1)"
+    else
+        log_error "Failed to create virtual environment"
+        exit 1
+    fi
+else
+    log_info "Virtual environment already exists"
 fi
 
 # Activate virtual environment
+log_info "Activating virtual environment..."
 source venv/bin/activate
 
-echo "Installing Python dependencies..."
-pip install -r requirements.txt
+if [ -n "$VIRTUAL_ENV" ]; then
+    log_success "Virtual environment activated: $VIRTUAL_ENV"
+    log_info "Python: $(which python)"
+    log_info "Pip: $(which pip)"
+else
+    log_error "Failed to activate virtual environment"
+    exit 1
+fi
 
-# Note: webrtcvad might fail to build on some systems, but the client will still work
-echo "   (If webrtcvad fails to install, that's okay - the client will use fallback speech detection)"
+log_info "Installing Python dependencies from requirements.txt..."
+log_info "Requirements file contents:"
+cat requirements.txt
 
 echo ""
-echo "Step 4: Configuration"
-echo ""
+log_info "Running: pip install -r requirements.txt"
+if pip install -r requirements.txt 2>&1 | tee /tmp/pip-install.log; then
+    log_success "Python dependencies installed"
+else
+    log_warning "Some packages may have failed to install"
+    log_info "Check /tmp/pip-install.log for details"
+fi
+
+log_info "Note: webrtcvad might fail to build - that's okay, fallback speech detection will be used"
+
+log_info "Installed Python packages:"
+pip list | grep -E "requests|opencv|pygame|pyaudio|numpy|scipy|pvporcupine" || log_info "Listing all packages..."
+pip list
+
+log_step "STEP 4: Configuration"
 
 # Check if config already exists
 if [ -f "config.json" ]; then
-    echo "[OK] Config file already exists"
+    log_info "Config file already exists"
+    log_info "Current config:"
+    cat config.json | head -20
 else
-    echo "Creating config file..."
+    log_info "Creating config file..."
+    CLIENT_ID="raspberry_pi_$(hostname)"
+    log_info "Client ID: $CLIENT_ID"
+
     cat > config.json <<EOF
 {
     "server_url": "https://klyramachine.onrender.com",
-    "client_id": "raspberry_pi_$(hostname)",
-    "camera_index": 0
+    "client_id": "$CLIENT_ID",
+    "camera_index": 0,
+    "wake_word": "hey buddy"
 }
 EOF
-    echo "[OK] Config created with default settings"
+
+    if [ -f "config.json" ]; then
+        log_success "Config file created"
+        log_info "Config contents:"
+        cat config.json
+    else
+        log_error "Failed to create config file"
+        exit 1
+    fi
 fi
 
-echo ""
-echo "Server URL: https://klyramachine.onrender.com"
-echo "(To change server URL later, edit ~/klyramachine/client/config.json)"
-
-echo ""
-echo "Step 5: Setting up auto-start..."
-chmod +x install_service.sh
-chmod +x start_klyra.sh
-chmod +x auto_update.sh
-echo ""
-echo "Running service installer..."
-if ./install_service.sh; then
-    echo "[OK] Service installation completed"
+log_info "Server URL: https://klyramachine.onrender.com"
+log_info "Testing server connection..."
+if curl -s --max-time 10 https://klyramachine.onrender.com/ > /dev/null 2>&1; then
+    log_success "Server is reachable"
 else
-    echo "[ERROR] Service installation failed, but you can still run manually"
-    echo "   To run manually: cd $INSTALL_DIR/client && ./start_klyra.sh"
+    log_warning "Server connection test failed (might be sleeping, will wake up on first request)"
+fi
+
+log_info "Checking for ding.mp3..."
+if [ -f "ding.mp3" ]; then
+    log_success "ding.mp3 found (wake word sound)"
+    log_info "File size: $(ls -lh ding.mp3 | awk '{print $5}')"
+else
+    log_warning "ding.mp3 not found (wake word will be silent)"
+fi
+
+log_step "STEP 5: Setting up Auto-Start Service"
+
+log_info "Making scripts executable..."
+chmod +x install_service.sh && log_success "install_service.sh is executable"
+chmod +x start_klyra.sh && log_success "start_klyra.sh is executable"
+chmod +x auto_update.sh && log_success "auto_update.sh is executable"
+
+log_info "Script permissions:"
+ls -lh install_service.sh start_klyra.sh auto_update.sh
+
+echo ""
+log_info "Running service installer (this will create systemd services)..."
+log_info "You may be prompted for your sudo password..."
+echo ""
+
+if ./install_service.sh 2>&1 | tee /tmp/service-install.log; then
+    log_success "Service installation completed"
+else
+    log_error "Service installation failed"
+    log_info "Check /tmp/service-install.log for details"
+    log_info "You can still run manually: cd $INSTALL_DIR/client && ./start_klyra.sh"
 fi
 
 echo ""
-echo "=========================================="
-echo "   INSTALLATION COMPLETE!"
-echo "=========================================="
+log_step "INSTALLATION COMPLETE!"
+
+log_success "Klyra Machine has been installed successfully!"
 echo ""
-echo "To start Klyra now, run:"
-echo "  sudo systemctl start klyra"
+
+log_info "Installation Summary:"
+log_info "  Location: $INSTALL_DIR"
+log_info "  Client: client_wake_improved.py"
+log_info "  Wake word: 'hey buddy'"
+log_info "  Server: https://klyramachine.onrender.com"
 echo ""
-echo "Or for a quick test (without service):"
-echo "  cd $INSTALL_DIR/client && ./start_klyra.sh"
+
+log_info "System Service Status:"
+if systemctl is-enabled klyra.service &>/dev/null; then
+    log_success "klyra.service is enabled (will auto-start on boot)"
+else
+    log_warning "klyra.service is not enabled"
+fi
+
+if systemctl is-active klyra.service &>/dev/null; then
+    log_success "klyra.service is running"
+else
+    log_info "klyra.service is not running yet"
+fi
+
+if systemctl is-enabled klyra-update.timer &>/dev/null; then
+    log_success "klyra-update.timer is enabled (auto-updates every hour)"
+else
+    log_warning "klyra-update.timer is not enabled"
+fi
+
 echo ""
-echo "To check status:"
-echo "  sudo systemctl status klyra"
+log_info "Commands to control Klyra:"
+echo "  Start:   ${GREEN}sudo systemctl start klyra${NC}"
+echo "  Stop:    ${YELLOW}sudo systemctl stop klyra${NC}"
+echo "  Restart: ${BLUE}sudo systemctl restart klyra${NC}"
+echo "  Status:  ${BLUE}sudo systemctl status klyra${NC}"
+echo "  Logs:    ${BLUE}sudo journalctl -u klyra -f${NC}"
 echo ""
-echo "To view logs:"
-echo "  sudo journalctl -u klyra -f"
+
+log_info "Quick test (without service):"
+echo "  ${GREEN}cd $INSTALL_DIR/client && ./start_klyra.sh${NC}"
 echo ""
-echo "Klyra will now:"
-echo "  - Auto-start on boot"
-echo "  - Auto-update every hour"
-echo "  - Auto-restart if it crashes"
+
+log_info "Klyra Features:"
+echo "  ✓ Auto-start on boot"
+echo "  ✓ Auto-update every hour"
+echo "  ✓ Auto-restart if it crashes"
+echo "  ✓ Wake word detection ('Hey Buddy')"
+echo "  ✓ Ding sound on wake word"
 echo ""
-echo "Say 'Hey Buddy' to talk to Klyra!"
+
+log_success "Say 'Hey Buddy' to talk to Klyra!"
+echo ""
+log_info "Installation log saved to: /tmp/service-install.log"
+log_info "Completed at: $(date)"
 echo "=========================================="
