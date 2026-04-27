@@ -33,7 +33,9 @@ def load_config():
                 "You're witty, funny, and not afraid to roast the user or comment on their surroundings. "
                 "Notice EVERYTHING - messy backgrounds, pets doing dumb things, questionable life choices, weird stuff on their desk. "
                 "Be like a sassy friend who calls them out but in a funny way. Don't be overly nice or helpful - be entertaining and a bit mean. "
-                "Keep responses SHORT and punchy - you're speaking out loud. Drop one-liners and roasts.")
+                "Keep responses SHORT and punchy - you're speaking out loud. Drop one-liners and roasts. "
+                "Remember what you've talked about before and reference it - bring up past conversations, jokes, or things you've noticed. "
+                "Build on previous topics and create ongoing jokes or running commentary.")
         }
 
     # Fall back to config.json for local development
@@ -134,18 +136,15 @@ async def conversation(
                 {"role": "system", "content": config["system_prompt"]}
             ]
 
-        # Add scene context if provided
+        # Add user message with scene context inline (don't clutter history with system messages)
         if scene_context:
-            context_message = f"[Current visual context: {scene_context}]"
-            conversation_histories[client_id].append({
-                "role": "system",
-                "content": context_message
-            })
+            user_message_with_context = f"{user_message}\n[What you can see: {scene_context}]"
+        else:
+            user_message_with_context = user_message
 
-        # Add user message
         conversation_histories[client_id].append({
             "role": "user",
-            "content": user_message
+            "content": user_message_with_context
         })
 
         # Get response from GPT
@@ -164,12 +163,13 @@ async def conversation(
             "content": assistant_message
         })
 
-        # Keep conversation history manageable (last 20 messages)
-        if len(conversation_histories[client_id]) > 20:
-            # Keep system prompt and last 19 messages
+        # Keep conversation history longer for better memory (last 50 messages)
+        # This allows for ~25 exchanges instead of just 10
+        if len(conversation_histories[client_id]) > 50:
+            # Keep system prompt and last 49 messages
             conversation_histories[client_id] = [
                 conversation_histories[client_id][0]
-            ] + conversation_histories[client_id][-19:]
+            ] + conversation_histories[client_id][-49:]
 
         return {
             "success": True,
@@ -310,17 +310,15 @@ async def process_interaction(
                 {"role": "system", "content": config["system_prompt"]}
             ]
 
-        # Add scene context if we have it
+        # Add user message with scene context inline (better for conversation continuity)
         if scene_context:
-            conversation_histories[client_id].append({
-                "role": "system",
-                "content": f"[You can see: {scene_context}]"
-            })
+            user_message_with_context = f"{user_message}\n[What you can see: {scene_context}]"
+        else:
+            user_message_with_context = user_message
 
-        # Add user message
         conversation_histories[client_id].append({
             "role": "user",
-            "content": user_message
+            "content": user_message_with_context
         })
 
         # Get conversation response
@@ -339,11 +337,12 @@ async def process_interaction(
             "content": assistant_message
         })
 
-        # Keep history manageable
-        if len(conversation_histories[client_id]) > 20:
+        # Keep conversation history longer for better memory (last 50 messages)
+        # This allows for ~25 exchanges instead of just 10
+        if len(conversation_histories[client_id]) > 50:
             conversation_histories[client_id] = [
                 conversation_histories[client_id][0]
-            ] + conversation_histories[client_id][-19:]
+            ] + conversation_histories[client_id][-49:]
 
         # Generate speech using ElevenLabs (much more natural voices!)
         print(f"Generating speech for: {assistant_message[:50]}...")
