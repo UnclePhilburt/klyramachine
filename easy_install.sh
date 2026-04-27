@@ -77,12 +77,7 @@ fi
 
 echo ""
 echo "Server URL: https://klyramachine.onrender.com"
-read -p "Change server URL? (press Enter to keep default, or type new URL): " new_url
-if [ ! -z "$new_url" ]; then
-    # Update server URL in config.json using sed
-    sed -i "s|\"server_url\": \".*\"|\"server_url\": \"$new_url\"|g" config.json
-    echo "[OK] Server URL updated"
-fi
+echo "(To change server URL later, edit ~/klyramachine/client/config.json)"
 
 echo ""
 echo "Step 5: Setting up auto-start..."
