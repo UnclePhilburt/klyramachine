@@ -348,7 +348,6 @@ async def process_interaction(
             print(f"Generated {len(audio_bytes)} bytes of audio")
 
             # Encode text safely for headers (only ASCII allowed in HTTP headers)
-            import base64
             response_text_b64 = base64.b64encode(assistant_message.encode('utf-8')).decode('ascii')
             scene_context_b64 = base64.b64encode((scene_context or "").encode('utf-8')).decode('ascii')
 
@@ -364,7 +363,6 @@ async def process_interaction(
         except Exception as tts_error:
             print(f"TTS Error: {tts_error}")
             # Return response with text but no audio (encode safely)
-            import base64
             response_text_b64 = base64.b64encode(assistant_message.encode('utf-8')).decode('ascii')
             scene_context_b64 = base64.b64encode((scene_context or "").encode('utf-8')).decode('ascii')
 
