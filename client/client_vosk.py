@@ -359,5 +359,22 @@ class VoskWakeWordClient:
 
 
 if __name__ == "__main__":
-    client = VoskWakeWordClient()
-    client.run()
+    try:
+        print("="*60)
+        print("STARTING KLYRA VOSK CLIENT")
+        print("="*60)
+        print(f"Working directory: {os.getcwd()}")
+        print(f"Python executable: {sys.executable}")
+        print("")
+
+        client = VoskWakeWordClient()
+        client.run()
+    except Exception as e:
+        print(f"\n\nFATAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        print("\n\nTroubleshooting:")
+        print("1. Check if Vosk model exists: ls -la vosk-model-small-en-us-0.15/")
+        print("2. Check logs: sudo journalctl -u klyra -n 50")
+        print("3. Try running manually: python client_vosk.py")
+        sys.exit(1)
