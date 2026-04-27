@@ -89,8 +89,10 @@ log_info "  - portaudio19-dev (audio library)"
 log_info "  - python3-opencv (camera/vision)"
 log_info "  - python3-scipy (scientific computing)"
 log_info "  - python3-numpy (numerical arrays)"
+log_info "  - libatlas-base-dev (linear algebra for OpenCV)"
+log_info "  - libopenblas-dev (optimized BLAS for Raspberry Pi)"
 
-if sudo apt install -y git python3-pip python3-venv python3-dev build-essential python3-pyaudio portaudio19-dev python3-opencv python3-scipy python3-numpy; then
+if sudo apt install -y git python3-pip python3-venv python3-dev build-essential python3-pyaudio portaudio19-dev python3-opencv python3-scipy python3-numpy libatlas-base-dev libopenblas-dev; then
     log_success "All system dependencies installed"
 else
     log_error "Failed to install system dependencies"
