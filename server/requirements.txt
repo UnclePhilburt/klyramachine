@@ -6,6 +6,7 @@ python-multipart>=0.0.6
 # AI APIs
 openai>=1.0.0
 elevenlabs>=0.2.0
+google-generativeai>=0.3.0
 
 # Image processing
 Pillow>=10.0.0

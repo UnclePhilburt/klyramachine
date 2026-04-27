@@ -15,6 +15,8 @@ from elevenlabs.client import ElevenLabs
 from elevenlabs import VoiceSettings
 import uvicorn
 from datetime import datetime
+import requests
+import google.generativeai as genai
 
 # Load configuration from environment variables or config file
 def load_config():
@@ -24,6 +26,7 @@ def load_config():
         return {
             "openai_api_key": os.getenv("OPENAI_API_KEY"),
             "elevenlabs_api_key": os.getenv("ELEVENLABS_API_KEY"),
+            "gemini_api_key": os.getenv("GEMINI_API_KEY"),
             "server_host": os.getenv("HOST", "0.0.0.0"),
             "server_port": int(os.getenv("PORT", 8000)),
             "elevenlabs_voice": os.getenv("ELEVENLABS_VOICE", "Adam"),
@@ -35,7 +38,8 @@ def load_config():
                 "Be like a sassy friend who calls them out but in a funny way. Don't be overly nice or helpful - be entertaining and a bit mean. "
                 "Keep responses SHORT and punchy - you're speaking out loud. Drop one-liners and roasts. "
                 "Remember what you've talked about before and reference it - bring up past conversations, jokes, or things you've noticed. "
-                "Build on previous topics and create ongoing jokes or running commentary.")
+                "Build on previous topics and create ongoing jokes or running commentary. "
+                "You have access to real-time information like weather, news, and current events - use it to be more relevant and funny.")
         }
 
     # Fall back to config.json for local development
@@ -51,6 +55,13 @@ config = load_config()
 # Initialize clients
 openai_client = OpenAI(api_key=config["openai_api_key"])
 elevenlabs_client = ElevenLabs(api_key=config["elevenlabs_api_key"])
+
+# Initialize Gemini (if API key provided)
+if config.get("gemini_api_key"):
+    genai.configure(api_key=config["gemini_api_key"])
+    gemini_model = genai.GenerativeModel('gemini-pro')
+else:
+    gemini_model = None
 
 # Initialize FastAPI
 app = FastAPI(title="Klyra Machine Server")
@@ -83,6 +94,26 @@ def save_conversation(client_id, history):
             json.dump(history, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"Error saving conversation for {client_id}: {e}")
+
+
+def get_realtime_info(query):
+    """Use Gemini to get real-time information (weather, news, etc.)"""
+    if not gemini_model:
+        return None
+
+    try:
+        # Use Gemini with Google Search grounding for real-time info
+        response = gemini_model.generate_content(
+            query,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.3,
+                max_output_tokens=200
+            )
+        )
+        return response.text
+    except Exception as e:
+        print(f"Error getting realtime info: {e}")
+        return None
 
 
 @app.get("/")
@@ -361,6 +392,21 @@ async def process_interaction(
             "role": "user",
             "content": user_message_with_context
         })
+
+        # Check if user is asking for real-time info (weather, news, etc.)
+        realtime_keywords = ["weather", "temperature", "forecast", "news", "current", "today", "now"]
+        needs_realtime = any(keyword in user_message.lower() for keyword in realtime_keywords)
+
+        if needs_realtime and gemini_model:
+            # Get real-time info from Gemini
+            print(f"Fetching real-time info for: {user_message}")
+            realtime_info = get_realtime_info(user_message)
+            if realtime_info:
+                # Inject real-time info as context
+                conversation_histories[client_id].append({
+                    "role": "system",
+                    "content": f"[Real-time info: {realtime_info}]"
+                })
 
         # Get conversation response
         response = openai_client.chat.completions.create(
