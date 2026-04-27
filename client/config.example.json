@@ -5,5 +5,8 @@
   "vision_check_interval": 10,
   "audio_record_duration": 5,
   "use_wake_word": false,
-  "wake_word": "hey klyra"
+  "wake_word": "hey buddy",
+  "enable_camera": true,
+  "vosk_model_path": "vosk-model-small-en-us-0.15",
+  "porcupine_access_key": "YOUR_PORCUPINE_ACCESS_KEY_HERE"
 }

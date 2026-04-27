@@ -184,8 +184,21 @@ fi
 log_info "Note: webrtcvad might fail to build - that's okay, fallback speech detection will be used"
 
 log_info "Installed Python packages:"
-pip list | grep -E "requests|opencv|pygame|pyaudio|numpy|scipy|pvporcupine" || log_info "Listing all packages..."
+pip list | grep -E "requests|opencv|pygame|pyaudio|numpy|scipy|pvporcupine|vosk" || log_info "Listing all packages..."
 pip list
+
+log_step "STEP 3.5: Downloading Vosk Model (Offline Wake Word)"
+
+log_info "Downloading Vosk model for 100% local wake word detection..."
+log_info "This is a one-time download (~40MB)"
+
+chmod +x download_vosk_model.sh
+if ./download_vosk_model.sh 2>&1 | tee /tmp/vosk-download.log; then
+    log_success "Vosk model downloaded!"
+else
+    log_warning "Vosk model download failed - will use cloud-based wake word"
+    log_info "You can manually download later with: ./download_vosk_model.sh"
+fi
 
 log_step "STEP 4: Configuration"
 
@@ -204,7 +217,9 @@ else
     "server_url": "https://klyramachine.onrender.com",
     "client_id": "$CLIENT_ID",
     "camera_index": 0,
-    "wake_word": "hey buddy"
+    "wake_word": "hey buddy",
+    "enable_camera": true,
+    "vosk_model_path": "vosk-model-small-en-us-0.15"
 }
 EOF
 

@@ -19,6 +19,7 @@ numpy>=1.24.0
 
 # Wake word detection
 pvporcupine>=3.0.0
+vosk>=0.3.45
 
 # Configuration
 python-dotenv>=1.0.0
