@@ -96,15 +96,42 @@ def save_conversation(client_id, history):
         print(f"Error saving conversation for {client_id}: {e}")
 
 
-def get_realtime_info(query):
+def get_user_location():
+    """Get user's location from IP address"""
+    try:
+        # Use ipapi.co for free IP geolocation
+        response = requests.get("https://ipapi.co/json/", timeout=3)
+        if response.status_code == 200:
+            data = response.json()
+            city = data.get("city", "")
+            region = data.get("region", "")
+            country = data.get("country_name", "")
+
+            if city and region:
+                return f"{city}, {region}, {country}"
+            elif city:
+                return f"{city}, {country}"
+            return country
+    except Exception as e:
+        print(f"Error getting location: {e}")
+    return None
+
+
+def get_realtime_info(query, location=None):
     """Use Gemini to get real-time information (weather, news, etc.)"""
     if not gemini_model:
         return None
 
     try:
+        # Add location context if available
+        if location:
+            query_with_location = f"{query} (User location: {location})"
+        else:
+            query_with_location = query
+
         # Use Gemini with Google Search grounding for real-time info
         response = gemini_model.generate_content(
-            query,
+            query_with_location,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.3,
                 max_output_tokens=200
@@ -414,9 +441,14 @@ async def process_interaction(
             needs_realtime = detection_response.choices[0].message.content.strip().upper() == "YES"
 
             if needs_realtime:
+                # Get user's location
+                location = get_user_location()
+                if location:
+                    print(f"📍 User location: {location}")
+
                 # Get real-time info from Gemini
                 print(f"🌐 Fetching real-time info for: {user_message}")
-                realtime_info = get_realtime_info(user_message)
+                realtime_info = get_realtime_info(user_message, location)
                 if realtime_info:
                     # Inject real-time info as context
                     conversation_histories[client_id].append({
