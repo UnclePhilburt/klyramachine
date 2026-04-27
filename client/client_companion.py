@@ -97,7 +97,8 @@ class CompanionClient:
         """Check if audio chunk has speech"""
         audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
         volume = np.abs(audio_data).mean()
-        return volume > 500
+        # Increased threshold to reduce false positives
+        return volume > 1000
 
     def check_if_user_speaking(self):
         """Quick check if user is currently speaking - non-blocking"""
@@ -337,6 +338,9 @@ class CompanionClient:
     def play_audio(self, audio_data):
         """Play audio"""
         try:
+            # Mark that we're playing audio (so we don't listen to ourselves)
+            self.is_speaking = True
+
             pygame.mixer.music.unload()
             with open("temp_response.mp3", 'wb') as f:
                 f.write(audio_data)
@@ -345,7 +349,14 @@ class CompanionClient:
             while pygame.mixer.music.get_busy():
                 time.sleep(0.1)
             pygame.mixer.music.unload()
+
+            # Add extra delay to ensure audio is fully done
+            time.sleep(0.5)
+
+            # Mark that we're done speaking
+            self.is_speaking = False
         except:
+            self.is_speaking = False
             pass
 
     def listen_for_followup(self, timeout=5):
