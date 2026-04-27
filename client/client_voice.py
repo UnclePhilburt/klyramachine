@@ -70,9 +70,21 @@ class KlyraVoiceClient:
         _, buffer = cv2.imencode('.jpg', frame)
         return buffer.tobytes()
 
-    def record_audio(self, duration=5):
-        """Record audio from microphone"""
-        print(f"[Recording for {duration} seconds...]")
+    def record_audio_push_to_talk(self):
+        """Record audio while Enter is held down"""
+        import msvcrt
+
+        print("[Hold SPACE to talk, release to send...]")
+        print("Waiting for SPACE key...")
+
+        # Wait for space key press
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key == b' ':  # Space bar
+                    break
+
+        print("[Recording... Release SPACE to send]")
 
         try:
             stream = self.audio.open(
@@ -84,12 +96,31 @@ class KlyraVoiceClient:
             )
 
             frames = []
-            for i in range(0, int(self.rate / self.chunk * duration)):
-                data = stream.read(self.chunk)
+
+            # Record while space is held (with timeout for safety)
+            max_duration = 30  # 30 second max
+            chunks_recorded = 0
+            max_chunks = int(self.rate / self.chunk * max_duration)
+
+            while chunks_recorded < max_chunks:
+                # Check if key is released
+                if msvcrt.kbhit():
+                    key = msvcrt.getch()
+                    break  # Any key press stops recording
+
+                data = stream.read(self.chunk, exception_on_overflow=False)
                 frames.append(data)
+                chunks_recorded += 1
 
             stream.stop_stream()
             stream.close()
+
+            duration = chunks_recorded * self.chunk / self.rate
+            print(f"[Recorded {duration:.1f} seconds]")
+
+            if len(frames) == 0:
+                print("No audio recorded")
+                return None
 
             # Convert to WAV
             wav_buffer = io.BytesIO()
@@ -132,6 +163,9 @@ class KlyraVoiceClient:
     def play_audio(self, audio_data):
         """Play audio through speaker"""
         try:
+            # Unload any previous audio first
+            pygame.mixer.music.unload()
+
             # Save to temporary file
             temp_file = "temp_response.mp3"
             with open(temp_file, 'wb') as f:
@@ -145,22 +179,24 @@ class KlyraVoiceClient:
             while pygame.mixer.music.get_busy():
                 time.sleep(0.1)
 
+            # Unload after playing
+            pygame.mixer.music.unload()
+
         except Exception as e:
             print(f"Error playing audio: {e}")
 
     def interact_voice(self, include_vision=True):
         """
         Voice interaction cycle:
-        1. Record user speaking
+        1. Record user speaking (hold SPACE to talk)
         2. Transcribe speech to text
         3. Optionally capture image
         4. Send to server
         5. Receive and play audio response
         """
 
-        # Record audio
-        audio_duration = self.config.get("audio_record_duration", 5)
-        audio_data = self.record_audio(duration=audio_duration)
+        # Record audio with push-to-talk
+        audio_data = self.record_audio_push_to_talk()
 
         if not audio_data:
             print("Failed to record audio")
@@ -237,11 +273,11 @@ class KlyraVoiceClient:
         return False
 
     def run_voice_mode(self):
-        """Run in voice mode - press Enter to start recording"""
+        """Run in voice mode - hold SPACE to talk"""
         print("\n" + "="*50)
-        print("KLYRA MACHINE - VOICE MODE")
+        print("KLYRA MACHINE - PUSH-TO-TALK MODE")
         print("="*50)
-        print("Press Enter, then SPEAK your message")
+        print("Hold SPACE to talk, release to send")
         print("Press Ctrl+C to exit")
         print("="*50 + "\n")
 
@@ -253,11 +289,9 @@ class KlyraVoiceClient:
 
         try:
             while self.running:
-                # Wait for user to press Enter
-                input("\n[Press Enter to speak] ")
-
-                # Record and interact
+                # Record and interact with push-to-talk
                 self.interact_voice(include_vision=True)
+                print()  # Empty line between interactions
 
         except KeyboardInterrupt:
             print("\nShutting down...")

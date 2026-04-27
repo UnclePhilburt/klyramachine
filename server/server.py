@@ -347,12 +347,17 @@ async def process_interaction(
             audio_bytes = response_audio.content
             print(f"Generated {len(audio_bytes)} bytes of audio")
 
+            # Encode text safely for headers (only ASCII allowed in HTTP headers)
+            import base64
+            response_text_b64 = base64.b64encode(assistant_message.encode('utf-8')).decode('ascii')
+            scene_context_b64 = base64.b64encode((scene_context or "").encode('utf-8')).decode('ascii')
+
             return Response(
                 content=audio_bytes,
                 media_type="audio/mpeg",
                 headers={
-                    "X-Response-Text": assistant_message,
-                    "X-Scene-Context": scene_context or "",
+                    "X-Response-Text-B64": response_text_b64,
+                    "X-Scene-Context-B64": scene_context_b64,
                     "Content-Disposition": "attachment; filename=response.mp3"
                 }
             )
