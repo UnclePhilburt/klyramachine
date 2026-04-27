@@ -61,6 +61,7 @@ class CompanionClient:
 
         self.last_frame = None
         self.running = False
+        self.is_user_speaking = False  # Track if user is currently speaking
 
         print("Step 9: All systems ready!\n")
 
@@ -97,6 +98,31 @@ class CompanionClient:
         audio_data = np.frombuffer(audio_chunk, dtype=np.int16)
         volume = np.abs(audio_data).mean()
         return volume > 500
+
+    def check_if_user_speaking(self):
+        """Quick check if user is currently speaking - non-blocking"""
+        try:
+            stream = self.audio.open(
+                format=self.audio_format,
+                channels=self.channels,
+                rate=self.rate,
+                input=True,
+                frames_per_buffer=self.chunk
+            )
+
+            # Check a few quick samples
+            is_speaking = False
+            for _ in range(3):
+                data = stream.read(self.chunk, exception_on_overflow=False)
+                if self.detect_speech(data):
+                    is_speaking = True
+                    break
+
+            stream.stop_stream()
+            stream.close()
+            return is_speaking
+        except:
+            return False
 
     def capture_image(self):
         """Capture from camera"""
@@ -419,7 +445,13 @@ class CompanionClient:
             while self.running:
                 # Check if it's time for a spontaneous observation
                 if time.time() >= self.next_observation:
-                    self.make_spontaneous_comment()
+                    # Only make observation if user is NOT speaking
+                    if not self.check_if_user_speaking():
+                        self.make_spontaneous_comment()
+                    else:
+                        # User is speaking, reschedule for later
+                        print("(User speaking, delaying observation)")
+                        self.next_observation = time.time() + 30
 
                 # Listen for wake word
                 self.listen_for_wake_word()
