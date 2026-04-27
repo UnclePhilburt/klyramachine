@@ -1,12 +1,13 @@
 [Unit]
 Description=Klyra Auto-Update Timer
-After=network.target
+After=multi-user.target
 
 [Timer]
 # Check for updates every hour (5 minutes after boot)
 OnBootSec=5min
 OnUnitActiveSec=1h
 Unit=klyra-update.service
+Persistent=true
 
 [Install]
 WantedBy=timers.target

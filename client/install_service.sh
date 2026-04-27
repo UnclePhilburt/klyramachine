@@ -162,22 +162,29 @@ SERVICEEOF
         log_error "Failed to create auto-update service"
     fi
 
-    # Create auto-update timer file
-    UPDATE_TIMER="/etc/systemd/system/klyra-update.timer"
-    log_info "Creating auto-update timer: $UPDATE_TIMER"
-    sudo tee $UPDATE_TIMER > /dev/null <<TIMEREOF
+    # Verify the service file exists before creating timer
+    if [ ! -f "$UPDATE_SERVICE" ]; then
+        log_error "Auto-update service file not found at $UPDATE_SERVICE"
+        log_info "Skipping timer creation"
+    else
+        # Create auto-update timer file
+        UPDATE_TIMER="/etc/systemd/system/klyra-update.timer"
+        log_info "Creating auto-update timer: $UPDATE_TIMER"
+        sudo tee $UPDATE_TIMER > /dev/null <<TIMEREOF
 [Unit]
 Description=Klyra Auto-Update Timer
-After=network.target
+After=multi-user.target
 
 [Timer]
 OnBootSec=5min
 OnUnitActiveSec=1h
 Unit=klyra-update.service
+Persistent=true
 
 [Install]
 WantedBy=timers.target
 TIMEREOF
+    fi
 
     if [ -f "$UPDATE_TIMER" ]; then
         log_success "Auto-update timer file created"
@@ -213,15 +220,23 @@ TIMEREOF
         systemd-analyze verify $UPDATE_SERVICE 2>&1 || true
     fi
 
-    # Try to enable timer
+    # Try to enable timer (don't fail installation if this doesn't work)
     echo ""
-    log_info "Enabling auto-update timer..."
-    if sudo systemctl enable klyra-update.timer 2>&1; then
+    log_info "Enabling auto-update timer (optional feature)..."
+
+    TIMER_ENABLE_OUTPUT=$(sudo systemctl enable klyra-update.timer 2>&1)
+    TIMER_ENABLE_STATUS=$?
+
+    if [ $TIMER_ENABLE_STATUS -eq 0 ]; then
         log_success "klyra-update.timer enabled"
 
         # Try to start timer
         log_info "Starting auto-update timer..."
-        if sudo systemctl start klyra-update.timer 2>&1; then
+
+        TIMER_START_OUTPUT=$(sudo systemctl start klyra-update.timer 2>&1)
+        TIMER_START_STATUS=$?
+
+        if [ $TIMER_START_STATUS -eq 0 ]; then
             log_success "Auto-update timer started successfully!"
             echo ""
             log_info "Timer status:"
@@ -230,14 +245,20 @@ TIMEREOF
             log_info "Timer schedule:"
             sudo systemctl list-timers klyra-update.timer --no-pager || true
         else
-            log_error "Timer failed to start"
-            log_info "Checking journal for errors..."
-            sudo journalctl -u klyra-update.timer -n 20 --no-pager || true
+            log_warning "Timer failed to start (non-critical)"
+            log_info "Error output:"
+            echo "$TIMER_START_OUTPUT"
+            log_info "Checking journal for more details..."
+            sudo journalctl -u klyra-update.timer -n 20 --no-pager 2>&1 || true
+            echo ""
+            log_info "You can manually update with: cd $SCRIPT_DIR/.. && git pull"
         fi
     else
-        log_error "Timer failed to enable"
-        log_info "Checking systemd for errors..."
-        sudo journalctl -xe --no-pager | tail -20 || true
+        log_warning "Timer failed to enable (non-critical)"
+        log_info "Error output:"
+        echo "$TIMER_ENABLE_OUTPUT"
+        log_info "This is optional - Klyra will still work without auto-updates"
+        log_info "You can manually update with: cd $SCRIPT_DIR/.. && git pull"
     fi
 else
     log_warning "systemd not available, skipping auto-update timer"
