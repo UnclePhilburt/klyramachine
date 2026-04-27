@@ -98,23 +98,84 @@ def save_conversation(client_id, history):
 
 
 def get_user_location():
-    """Get user's location from IP address"""
+    """Get user's location from IP address using multiple services for accuracy"""
+
+    # Try ip-api.com first (has zip code and coordinates, very accurate)
     try:
-        # Use ipapi.co for free IP geolocation
-        response = requests.get("https://ipapi.co/json/", timeout=3)
+        response = requests.get("http://ip-api.com/json/?fields=status,city,regionName,zip,lat,lon,country", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("status") == "success":
+                city = data.get("city", "")
+                region = data.get("regionName", "")
+                zip_code = data.get("zip", "")
+                country = data.get("country", "")
+                lat = data.get("lat")
+                lon = data.get("lon")
+
+                # Build detailed location string
+                if city and region and zip_code:
+                    location = f"{city}, {region} {zip_code}, {country}"
+                    print(f"📍 Location: {location} (lat: {lat}, lon: {lon})")
+                    return location
+                elif city and region:
+                    location = f"{city}, {region}, {country}"
+                    print(f"📍 Location: {location}")
+                    return location
+                elif city:
+                    location = f"{city}, {country}"
+                    print(f"📍 Location: {location}")
+                    return location
+    except Exception as e:
+        print(f"ip-api.com error: {e}")
+
+    # Fallback to ipapi.co
+    try:
+        response = requests.get("https://ipapi.co/json/", timeout=5)
         if response.status_code == 200:
             data = response.json()
             city = data.get("city", "")
             region = data.get("region", "")
+            postal = data.get("postal", "")
             country = data.get("country_name", "")
 
-            if city and region:
-                return f"{city}, {region}, {country}"
+            if city and region and postal:
+                location = f"{city}, {region} {postal}, {country}"
+                print(f"📍 Location from ipapi.co: {location}")
+                return location
+            elif city and region:
+                location = f"{city}, {region}, {country}"
+                print(f"📍 Location from ipapi.co: {location}")
+                return location
             elif city:
-                return f"{city}, {country}"
-            return country
+                location = f"{city}, {country}"
+                print(f"📍 Location from ipapi.co: {location}")
+                return location
     except Exception as e:
-        print(f"Error getting location: {e}")
+        print(f"ipapi.co error: {e}")
+
+    # Last resort: ipinfo.io
+    try:
+        response = requests.get("https://ipinfo.io/json", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            city = data.get("city", "")
+            region = data.get("region", "")
+            postal = data.get("postal", "")
+            country = data.get("country", "")
+
+            if city and region and postal:
+                location = f"{city}, {region} {postal}"
+                print(f"📍 Location from ipinfo.io: {location}")
+                return location
+            elif city and region:
+                location = f"{city}, {region}"
+                print(f"📍 Location from ipinfo.io: {location}")
+                return location
+    except Exception as e:
+        print(f"ipinfo.io error: {e}")
+
+    print("⚠️ Could not determine location from IP")
     return None
 
 
