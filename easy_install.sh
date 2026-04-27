@@ -83,7 +83,15 @@ echo ""
 echo "Step 5: Setting up auto-start..."
 chmod +x install_service.sh
 chmod +x start_klyra.sh
-./install_service.sh
+chmod +x auto_update.sh
+echo ""
+echo "Running service installer..."
+if ./install_service.sh; then
+    echo "[OK] Service installation completed"
+else
+    echo "[ERROR] Service installation failed, but you can still run manually"
+    echo "   To run manually: cd $INSTALL_DIR/client && ./start_klyra.sh"
+fi
 
 echo ""
 echo "=========================================="
@@ -104,7 +112,7 @@ echo "  sudo journalctl -u klyra -f"
 echo ""
 echo "Klyra will now:"
 echo "  - Auto-start on boot"
-echo "  - Auto-update every minute"
+echo "  - Auto-update every hour"
 echo "  - Auto-restart if it crashes"
 echo ""
 echo "Say 'Hey Buddy' to talk to Klyra!"

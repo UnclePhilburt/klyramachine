@@ -3,9 +3,9 @@ Description=Klyra Auto-Update Timer
 Requires=klyra-update.service
 
 [Timer]
-# Check for updates every minute
-OnBootSec=1min
-OnUnitActiveSec=1min
+# Check for updates every hour (5 minutes after boot)
+OnBootSec=5min
+OnUnitActiveSec=1h
 
 [Install]
 WantedBy=timers.target
