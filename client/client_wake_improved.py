@@ -469,8 +469,7 @@ class ImprovedWakeWordClient:
         audio_data = self.record_short_audio(duration=2.5)
 
         if not audio_data:
-            # No speech detected
-            print(".", end="", flush=True)
+            # No speech detected - don't print anything to avoid spam
             return False
 
         # Speech detected, transcribe it
@@ -539,10 +538,17 @@ class ImprovedWakeWordClient:
         self.running = True
         print("👂 Listening for wake word...\n")
 
+        last_status_time = time.time()
+
         try:
             while self.running:
                 self.listen_for_wake_word()
                 time.sleep(0.05)
+
+                # Print status every 60 seconds to show we're still alive
+                if time.time() - last_status_time > 60:
+                    print(f"[{time.strftime('%H:%M:%S')}] Still listening for '{self.wake_word}'...")
+                    last_status_time = time.time()
 
         except KeyboardInterrupt:
             print("\n\nShutting down...")
