@@ -350,20 +350,63 @@ else
 fi
 
 echo ""
+log_info "========================================"
+log_info "AUDIO DETECTION TEST (EXTREME DEBUG)"
+log_info "========================================"
+log_info "Testing PyAudio availability..."
+if python3 -c "import pyaudio; print('PyAudio imported OK'); p = pyaudio.PyAudio(); print('PyAudio object created'); p.terminate(); print('PyAudio terminated OK')" 2>&1 | tee /tmp/audio-test.log; then
+    AUDIO_RESULT="AUDIO_AVAILABLE"
+    log_success "Audio test PASSED - audio hardware detected"
+else
+    AUDIO_RESULT="NO_AUDIO"
+    log_warning "Audio test FAILED - no audio hardware"
+fi
+log_info "Audio test result: $AUDIO_RESULT"
+log_info "Full test output saved to: /tmp/audio-test.log"
+cat /tmp/audio-test.log || true
+echo ""
+
 # Check if we're in text mode FIRST (before checking service)
-if ! python3 -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate()" 2>/dev/null; then
-    log_warning "No audio detected - TEXT INPUT MODE"
-    log_info ""
-    log_info "Disabling auto-start service (text mode requires interactive input)..."
-    sudo systemctl disable klyra.service 2>/dev/null || true
-    sudo systemctl stop klyra.service 2>/dev/null || true
+if [ "$AUDIO_RESULT" = "NO_AUDIO" ]; then
+    log_warning "========================================"
+    log_warning "NO AUDIO DETECTED - ENTERING TEXT MODE"
+    log_warning "========================================"
+    echo ""
+    log_info "[DEBUG] Current directory: $(pwd)"
+    log_info "[DEBUG] Target directory: $INSTALL_DIR/client"
+    log_info "[DEBUG] Checking if client_text.py exists..."
+    if [ -f "$INSTALL_DIR/client/client_text.py" ]; then
+        log_success "[DEBUG] client_text.py found!"
+        log_info "[DEBUG] File size: $(ls -lh $INSTALL_DIR/client/client_text.py | awk '{print $5}')"
+    else
+        log_error "[DEBUG] client_text.py NOT FOUND!"
+        log_info "[DEBUG] Listing client directory:"
+        ls -la "$INSTALL_DIR/client/" | head -20
+    fi
+    echo ""
+    log_info "[DEBUG] Disabling auto-start service..."
+    sudo systemctl disable klyra.service 2>&1 | head -5 || true
+    log_info "[DEBUG] Stopping service..."
+    sudo systemctl stop klyra.service 2>&1 | head -5 || true
+    log_info "[DEBUG] Service disabled and stopped"
     echo ""
     log_success "==================================================="
-    log_success "  STARTING KLYRA IN TEXT MODE"
+    log_success "  LAUNCHING KLYRA TEXT MODE NOW"
     log_success "==================================================="
+    log_info "[DEBUG] Changing to client directory..."
+    cd "$INSTALL_DIR/client" || { log_error "[DEBUG] Failed to cd!"; exit 1; }
+    log_success "[DEBUG] Now in: $(pwd)"
+    log_info "[DEBUG] Python3 path: $(which python3)"
+    log_info "[DEBUG] Python3 version: $(python3 --version)"
+    log_info "[DEBUG] About to exec: python3 client_text.py"
+    log_info "[DEBUG] This is the last line before text client starts"
+    echo ""
+    echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
+    echo "EXECUTING: python3 client_text.py"
+    echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
     echo ""
     # Start text client interactively directly (skip start_klyra.sh)
-    cd "$INSTALL_DIR/client" && exec python3 client_text.py
+    exec python3 client_text.py
 else
     log_info "Checking service status..."
     if systemctl is-active klyra.service &>/dev/null; then
