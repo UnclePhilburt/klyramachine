@@ -32,9 +32,13 @@ source venv/bin/activate
 pip install -q pvporcupine vosk Pillow
 
 # Config
+# Make launcher executable
+cd ~/klyramachine
+chmod +x START_KLYRA.sh
+
 cp config.example.json config.json
 
 echo ""
 echo "✅ DONE!"
 echo ""
-echo "Run: cd ~/klyramachine/client && source venv/bin/activate && python3 client_companion.py"
+echo "To start Klyra, double-click: ~/klyramachine/START_KLYRA.sh
