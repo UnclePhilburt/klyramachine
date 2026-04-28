@@ -34,9 +34,14 @@ class ImprovedWakeWordClient:
 
         # Initialize camera
         print("Step 3: Starting camera...")
-        self.camera = cv2.VideoCapture(self.config.get("camera_index", 0))
-        time.sleep(0.5)
-        print("Step 4: Camera ready!")
+        camera_enabled = self.config.get("enable_camera", True)
+        if camera_enabled:
+            self.camera = cv2.VideoCapture(self.config.get("camera_index", 0))
+            time.sleep(0.5)
+            print("Step 4: Camera ready!")
+        else:
+            self.camera = None
+            print("Step 4: Camera disabled (faster responses)")
 
         # Initialize audio
         print("Step 5: Starting audio...")
@@ -197,7 +202,7 @@ class ImprovedWakeWordClient:
 
     def capture_image(self):
         """Capture from camera"""
-        if not self.camera.isOpened():
+        if not self.camera or not self.camera.isOpened():
             return None
         ret, frame = self.camera.read()
         if not ret:

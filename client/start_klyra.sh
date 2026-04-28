@@ -32,6 +32,9 @@ fi
 echo ""
 
 # Check which wake word method to use
+echo "Checking for wake word detection methods..."
+echo ""
+
 if [ -f "vosk-model-small-en-us-0.15/mfcc.conf" ]; then
     echo "✓ Vosk model found - using 100% offline wake word detection"
     echo "Starting: client_vosk.py"
@@ -43,7 +46,8 @@ elif python -c "import pvporcupine" 2>/dev/null && [ -f "config.json" ] && grep 
     echo ""
     exec python client_porcupine.py
 else
-    echo "✓ Using cloud-based wake word detection"
+    echo "✓ Using cloud-based wake word detection (Vosk model not found)"
+    echo "  To use offline detection, run: ./download_vosk_model.sh"
     echo "Starting: client_wake_improved.py"
     echo ""
     exec python client_wake_improved.py
