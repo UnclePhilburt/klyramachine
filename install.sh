@@ -1,32 +1,40 @@
 #!/bin/bash
-# Simple one-line installer for Klyra Machine
-
 set -e
 
-echo "Installing Klyra Machine..."
+echo "INSTALLING KLYRA MACHINE..."
 
-# Install dependencies
+# Install EVERYTHING from system packages
 sudo apt update -qq
-sudo apt install -y git python3-pip python3-venv python3-pyaudio portaudio19-dev python3-opencv
+sudo apt install -y \
+    git \
+    python3-pip \
+    python3-venv \
+    python3-pyaudio \
+    python3-pygame \
+    python3-opencv \
+    python3-scipy \
+    python3-numpy \
+    python3-requests \
+    python3-dotenv \
+    portaudio19-dev
 
-# Clone repo
+# Clone
 cd ~
 rm -rf klyramachine
 git clone https://github.com/UnclePhilburt/klyramachine.git
 cd klyramachine/client
 
-# Create venv and install
-python3 -m venv venv
+# Create venv with system packages
+python3 -m venv --system-site-packages venv
 source venv/bin/activate
-pip install -r requirements.txt
 
-# Create config
+# Only install what's NOT available as system package
+pip install -q pvporcupine vosk Pillow
+
+# Config
 cp config.example.json config.json
 
 echo ""
-echo "✅ Installation complete!"
+echo "✅ DONE!"
 echo ""
-echo "To start Klyra:"
-echo "  cd ~/klyramachine/client"
-echo "  source venv/bin/activate"
-echo "  python3 client_text.py"
+echo "Run: cd ~/klyramachine/client && source venv/bin/activate && python3 client_companion.py"
