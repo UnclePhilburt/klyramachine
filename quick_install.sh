@@ -24,7 +24,7 @@ git clone -q https://github.com/UnclePhilburt/klyramachine.git
 # Setup Python environment
 echo "[3/4] Setting up Python environment..."
 cd ~/klyramachine/client
-python3 -m venv venv
+python3 -m venv venv --system-site-packages
 source venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r requirements.txt
