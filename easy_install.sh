@@ -208,10 +208,26 @@ log_info "Downloading Vosk model for 100% local wake word detection..."
 log_info "This is a one-time download (~40MB)"
 
 chmod +x download_vosk_model.sh
+
+# Make sure we have unzip
+if ! command -v unzip &> /dev/null; then
+    log_info "Installing unzip (required for Vosk model)..."
+    sudo apt install -y unzip
+fi
+
+# Download Vosk model with better error handling
 if ./download_vosk_model.sh 2>&1 | tee /tmp/vosk-download.log; then
     log_success "Vosk model downloaded!"
+
+    # Verify the model actually exists
+    if [ -f "vosk-model-small-en-us-0.15/mfcc.conf" ]; then
+        log_success "Vosk model verified - 100% offline wake word enabled!"
+    else
+        log_warning "Vosk model files incomplete - will use cloud-based wake word"
+    fi
 else
     log_warning "Vosk model download failed - will use cloud-based wake word"
+    log_info "This is okay! Cloud-based wake word still works."
     log_info "You can manually download later with: ./download_vosk_model.sh"
 fi
 
@@ -288,6 +304,35 @@ else
 fi
 
 echo ""
+log_step "STEP 6: Starting Klyra Service"
+
+log_info "Starting Klyra service..."
+if sudo systemctl start klyra 2>&1 | tee -a /tmp/service-install.log; then
+    log_success "Service start command executed"
+    sleep 3  # Give it time to start
+else
+    log_warning "Service start command had issues"
+fi
+
+echo ""
+log_info "Checking service status..."
+if systemctl is-active klyra.service &>/dev/null; then
+    log_success "✓ Klyra is running!"
+    echo ""
+    log_info "Service output (last 10 lines):"
+    sudo journalctl -u klyra -n 10 --no-pager | tail -10 || true
+else
+    log_error "Service failed to start"
+    echo ""
+    log_info "Checking error logs..."
+    sudo journalctl -u klyra -n 20 --no-pager || true
+    echo ""
+    log_info "Trying manual test..."
+    log_info "Running: timeout 5 ./start_klyra.sh"
+    timeout 5 ./start_klyra.sh || log_warning "Manual test also failed"
+fi
+
+echo ""
 log_step "INSTALLATION COMPLETE!"
 
 log_success "Klyra Machine has been installed successfully!"
@@ -295,7 +340,7 @@ echo ""
 
 log_info "Installation Summary:"
 log_info "  Location: $INSTALL_DIR"
-log_info "  Client: client_wake_improved.py"
+log_info "  Client: client_wake_improved.py or client_vosk.py (auto-detected)"
 log_info "  Wake word: 'hey buddy'"
 log_info "  Server: https://klyramachine.onrender.com"
 echo ""
@@ -308,9 +353,9 @@ else
 fi
 
 if systemctl is-active klyra.service &>/dev/null; then
-    log_success "klyra.service is running"
+    log_success "klyra.service is RUNNING ✓"
 else
-    log_info "klyra.service is not running yet"
+    log_warning "klyra.service is NOT running - check logs above"
 fi
 
 if systemctl is-enabled klyra-update.timer &>/dev/null; then
