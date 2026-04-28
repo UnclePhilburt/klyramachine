@@ -166,7 +166,11 @@ class CompanionClient:
         """Take a photo and make a spontaneous comment"""
         print("\n👁️  *Klyra observes you*")
 
-        image_data, frame = self.capture_image()
+        result = self.capture_image()
+        if result is None:
+            print("⚠️  Camera unavailable, skipping observation")
+            return
+        image_data, frame = result
         if not image_data:
             return
 
