@@ -7,7 +7,7 @@ Pillow>=10.0.0
 
 # Audio input/output (optional for text mode)
 pyaudio>=0.2.13
-pygame>=2.5.0
+# pygame>=2.5.0  # Using system package python3-pygame
 
 # Audio processing and noise reduction
 scipy>=1.11.0
