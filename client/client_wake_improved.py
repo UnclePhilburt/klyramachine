@@ -121,13 +121,38 @@ class ImprovedWakeWordClient:
             # Show available audio devices
             device_count = self.audio.get_device_count()
             print(f"[STEP 3]   Found {device_count} audio devices:")
-            for i in range(min(device_count, 5)):  # Show first 5
+
+            has_input = False
+            for i in range(device_count):
                 try:
                     info = self.audio.get_device_info_by_index(i)
                     if info['maxInputChannels'] > 0:
                         print(f"[STEP 3]     - Input #{i}: {info['name']}")
+                        has_input = True
                 except:
                     pass
+
+            if not has_input:
+                print("")
+                print("[WARNING] ═══════════════════════════════════════════════")
+                print("[WARNING] NO MICROPHONE DETECTED!")
+                print("[WARNING] ═══════════════════════════════════════════════")
+                print("[WARNING] ")
+                print("[WARNING] Switching to TEXT MODE automatically...")
+                print("[WARNING] ")
+                print("[WARNING] To use voice mode:")
+                print("[WARNING]   1. Connect a USB microphone to the Raspberry Pi")
+                print("[WARNING]   2. Restart with: sudo systemctl restart klyra")
+                print("[WARNING] ")
+                print("[WARNING] ═══════════════════════════════════════════════")
+                print("")
+                self.audio.terminate()
+
+                # Switch to text mode
+                print("[INFO] Launching text mode client...")
+                import subprocess
+                subprocess.run([sys.executable, "client_text.py"])
+                sys.exit(0)
 
             self.audio_format = pyaudio.paInt16
             self.channels = 1
