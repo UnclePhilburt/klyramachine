@@ -353,16 +353,43 @@ echo ""
 log_info "========================================"
 log_info "AUDIO DETECTION TEST (EXTREME DEBUG)"
 log_info "========================================"
-log_info "Testing PyAudio availability..."
-if python3 -c "import pyaudio; print('PyAudio imported OK'); p = pyaudio.PyAudio(); print('PyAudio object created'); p.terminate(); print('PyAudio terminated OK')" 2>&1 | tee /tmp/audio-test.log; then
+log_info "Testing PyAudio availability and actual audio devices..."
+
+# More robust audio test - check if there are actual input devices
+AUDIO_TEST_OUTPUT=$(python3 -c "
+import pyaudio
+import sys
+try:
+    p = pyaudio.PyAudio()
+    device_count = p.get_device_count()
+    input_devices = 0
+    for i in range(device_count):
+        info = p.get_device_info_by_index(i)
+        if info['maxInputChannels'] > 0:
+            input_devices += 1
+            print(f'Found input device: {info[\"name\"]}')
+    p.terminate()
+    if input_devices > 0:
+        print(f'RESULT: {input_devices} input devices found')
+        sys.exit(0)
+    else:
+        print('RESULT: No input devices found')
+        sys.exit(1)
+except Exception as e:
+    print(f'ERROR: {e}')
+    sys.exit(1)
+" 2>&1 | tee /tmp/audio-test.log; echo "EXIT_CODE: $?")
+
+echo "$AUDIO_TEST_OUTPUT"
+if echo "$AUDIO_TEST_OUTPUT" | grep -q "EXIT_CODE: 0"; then
     AUDIO_RESULT="AUDIO_AVAILABLE"
-    log_success "Audio test PASSED - audio hardware detected"
+    log_success "Audio test PASSED - input devices detected"
 else
     AUDIO_RESULT="NO_AUDIO"
-    log_warning "Audio test FAILED - no audio hardware"
+    log_warning "Audio test FAILED - no input devices found"
 fi
 log_info "Audio test result: $AUDIO_RESULT"
-log_info "Full test output saved to: /tmp/audio-test.log"
+log_info "Full test output:"
 cat /tmp/audio-test.log || true
 echo ""
 
