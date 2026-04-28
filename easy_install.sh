@@ -202,7 +202,33 @@ log_info "Installed Python packages:"
 pip list | grep -E "requests|opencv|pygame|pyaudio|numpy|scipy|pvporcupine|vosk" || log_info "Listing all packages..."
 pip list
 
-log_step "STEP 3.5: Setting up Vosk Model (Offline Wake Word)"
+log_step "STEP 3.5: Configuring Audio System (ALSA)"
+
+log_info "Fixing ALSA configuration to prevent spam errors..."
+
+# Create ALSA config to suppress errors about missing surround sound configs
+if [ ! -f /etc/asound.conf ]; then
+    log_info "Creating /etc/asound.conf..."
+    sudo tee /etc/asound.conf > /dev/null <<'ALSAEOF'
+# Simple ALSA configuration for Raspberry Pi
+# Prevents errors about missing surround sound configurations
+
+pcm.!default {
+    type hw
+    card 0
+}
+
+ctl.!default {
+    type hw
+    card 0
+}
+ALSAEOF
+    log_success "ALSA configuration created"
+else
+    log_info "/etc/asound.conf already exists, skipping"
+fi
+
+log_step "STEP 3.6: Setting up Vosk Model (Offline Wake Word)"
 
 log_info "Checking Vosk model for 100% local wake word detection..."
 
