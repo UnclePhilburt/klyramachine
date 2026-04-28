@@ -199,11 +199,21 @@ class ImprovedWakeWordClient:
         print("")
         print("[STEP 4] Initializing audio playback...")
         try:
-            pygame.mixer.init()
+            # Initialize with Pi-compatible settings
+            # Try 44100Hz first (standard), fallback to 22050Hz if needed
+            try:
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
+                print(f"[STEP 4]   Mixer initialized at 44100Hz")
+            except:
+                print(f"[STEP 4]   44100Hz failed, trying 22050Hz...")
+                pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=2048)
+                print(f"[STEP 4]   Mixer initialized at 22050Hz")
+
             print(f"[STEP 4]   Mixer frequency: {pygame.mixer.get_init()[0]}Hz")
             print("[STEP 4]   ✓ Pygame mixer ready!")
         except Exception as e:
             print(f"[ERROR] Pygame mixer initialization failed: {e}")
+            print(f"[ERROR] This might be a Raspberry Pi audio configuration issue")
             raise
 
         self.running = False

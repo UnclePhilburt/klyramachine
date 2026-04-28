@@ -171,8 +171,15 @@ class VoskWakeWordClient:
 
         # Initialize pygame for audio playback
         print("Step 9: Starting pygame mixer...")
-        pygame.mixer.init()
-        print("Step 10: Pygame ready!")
+        try:
+            # Initialize with Pi-compatible settings
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
+            print("Step 10: Pygame mixer initialized at 44100Hz")
+        except:
+            print("Step 10: 44100Hz failed, trying 22050Hz...")
+            pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=2048)
+            print("Step 10: Pygame mixer initialized at 22050Hz")
+        print("Step 11: Pygame ready!")
 
         self.running = False
         print("Step 11: All systems ready!")
