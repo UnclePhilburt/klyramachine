@@ -89,7 +89,7 @@ if [ ! -d "$INSTALL_DIR/.git" ]; then
 
     # Clone the repository
     log_info "Cloning from https://github.com/UnclePhilburt/klyramachine.git"
-    if git clone https://github.com/UnclePhilburt/klyramachine.git "$INSTALL_DIR"; then
+    cd "$HOME" && if git clone https://github.com/UnclePhilburt/klyramachine.git; then
         log_success "Code downloaded successfully"
         cd "$INSTALL_DIR"
     else
