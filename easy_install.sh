@@ -122,18 +122,18 @@ log_step "STEP 2: Downloading Klyra Machine"
 
 if [ -d "$INSTALL_DIR" ]; then
     log_warning "Klyra already exists at $INSTALL_DIR"
-    log_info "Directory contents:"
-    ls -lah "$INSTALL_DIR" | head -10
+    log_info "Directory size: $(du -sh $INSTALL_DIR 2>/dev/null | cut -f1 || echo 'unknown')"
 
-    read -p "Delete and reinstall? (yes/no): " reinstall
-    if [ "$reinstall" = "yes" ]; then
-        log_info "Removing existing installation..."
-        rm -rf "$INSTALL_DIR"
-        log_success "Old installation removed"
-    else
-        log_info "Installation cancelled by user"
-        exit 0
+    # Stop the service if it's running
+    if systemctl is-active klyra.service &>/dev/null; then
+        log_info "Stopping running service..."
+        sudo systemctl stop klyra.service
+        log_success "Service stopped"
     fi
+
+    log_info "Automatically removing old installation for fresh install..."
+    rm -rf "$INSTALL_DIR"
+    log_success "Old installation removed"
 fi
 
 log_info "Cloning from GitHub: https://github.com/UnclePhilburt/klyramachine.git"
