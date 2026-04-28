@@ -68,6 +68,7 @@ fi
 # Get current directory
 INSTALL_DIR="$HOME/klyramachine"
 log_info "Installation directory: $INSTALL_DIR"
+# Check if we need to download the codeif [ ! -d "$INSTALL_DIR/.git" ]; then    log_info "Klyra code not found, downloading from GitHub..."    if [ -d "$INSTALL_DIR" ]; then        log_warning "Removing incomplete installation at $INSTALL_DIR"        rm -rf "$INSTALL_DIR"    fi    log_info "Cloning from https://github.com/UnclePhilburt/klyramachine.git"    if git clone https://github.com/UnclePhilburt/klyramachine.git "$INSTALL_DIR"; then        log_success "Code downloaded successfully"        cd "$INSTALL_DIR"    else        log_error "Failed to download code from GitHub"        log_info "Please check your internet connection and try again"        exit 1    fielse    log_info "Klyra code already present, updating..."    cd "$INSTALL_DIR"    git pull || log_warning "Could not update code (continuing with existing version)"fi
 
 log_step "STEP 1: Installing System Dependencies"
 log_info "Updating package lists..."
