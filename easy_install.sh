@@ -350,34 +350,33 @@ else
 fi
 
 echo ""
-log_info "Checking service status..."
-if systemctl is-active klyra.service &>/dev/null; then
-    log_success "✓ Klyra is running!"
+# Check if we're in text mode FIRST (before checking service)
+if ! python3 -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate()" 2>/dev/null; then
+    log_warning "No audio detected - TEXT INPUT MODE"
+    log_info ""
+    log_info "Disabling auto-start service (text mode requires interactive input)..."
+    sudo systemctl disable klyra.service 2>/dev/null || true
+    sudo systemctl stop klyra.service 2>/dev/null || true
     echo ""
-    log_info "Service output (last 10 lines):"
-    sudo journalctl -u klyra -n 10 --no-pager | tail -10 || true
+    log_success "==================================================="
+    log_success "  STARTING KLYRA IN TEXT MODE"
+    log_success "==================================================="
+    echo ""
+    # Start text client interactively directly (skip start_klyra.sh)
+    cd "$INSTALL_DIR/client" && exec python3 client_text.py
 else
-    log_error "Service failed to start"
-    echo ""
-    log_info "Checking error logs..."
-    sudo journalctl -u klyra -n 30 --no-pager || true
-    echo ""
-
-    # Check if we're in text mode (no audio)
-    if ! python3 -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate()" 2>/dev/null; then
-        log_warning "No audio detected - Switching to TEXT INPUT MODE"
-        log_info ""
-        log_info "Disabling auto-start service (text mode requires interactive input)..."
-        sudo systemctl disable klyra.service 2>/dev/null || true
-        sudo systemctl stop klyra.service 2>/dev/null || true
+    log_info "Checking service status..."
+    if systemctl is-active klyra.service &>/dev/null; then
+        log_success "✓ Klyra is running!"
         echo ""
-        log_success "==================================================="
-        log_success "  STARTING KLYRA IN TEXT MODE"
-        log_success "==================================================="
-        echo ""
-        # Start text client interactively directly (skip start_klyra.sh)
-        cd "$INSTALL_DIR/client" && python3 client_text.py
+        log_info "Service output (last 10 lines):"
+        sudo journalctl -u klyra -n 10 --no-pager | tail -10 || true
     else
+        log_error "Service failed to start"
+        echo ""
+        log_info "Checking error logs..."
+        sudo journalctl -u klyra -n 30 --no-pager || true
+        echo ""
         log_info "Trying manual test..."
         log_info "Running: timeout 5 ./start_klyra.sh"
         timeout 5 ./start_klyra.sh || log_warning "Manual test also failed"
