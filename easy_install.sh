@@ -202,33 +202,42 @@ log_info "Installed Python packages:"
 pip list | grep -E "requests|opencv|pygame|pyaudio|numpy|scipy|pvporcupine|vosk" || log_info "Listing all packages..."
 pip list
 
-log_step "STEP 3.5: Downloading Vosk Model (Offline Wake Word)"
+log_step "STEP 3.5: Setting up Vosk Model (Offline Wake Word)"
 
-log_info "Downloading Vosk model for 100% local wake word detection..."
-log_info "This is a one-time download (~40MB)"
+log_info "Checking Vosk model for 100% local wake word detection..."
 
-chmod +x download_vosk_model.sh
-
-# Make sure we have unzip
-if ! command -v unzip &> /dev/null; then
-    log_info "Installing unzip (required for Vosk model)..."
-    sudo apt install -y unzip
-fi
-
-# Download Vosk model with better error handling
-if ./download_vosk_model.sh 2>&1 | tee /tmp/vosk-download.log; then
-    log_success "Vosk model downloaded!"
-
-    # Verify the model actually exists
-    if [ -f "vosk-model-small-en-us-0.15/mfcc.conf" ]; then
-        log_success "Vosk model verified - 100% offline wake word enabled!"
-    else
-        log_warning "Vosk model files incomplete - will use cloud-based wake word"
-    fi
+# Check if model already exists (from git clone)
+if [ -f "vosk-model-small-en-us-0.15/conf/mfcc.conf" ]; then
+    log_success "Vosk model already present from repository!"
+    log_info "Model size: $(du -sh vosk-model-small-en-us-0.15 | cut -f1)"
+    log_success "100% offline wake word enabled!"
 else
-    log_warning "Vosk model download failed - will use cloud-based wake word"
-    log_info "This is okay! Cloud-based wake word still works."
-    log_info "You can manually download later with: ./download_vosk_model.sh"
+    log_info "Vosk model not in repository, downloading..."
+    log_info "This is a one-time download (~40MB)"
+
+    chmod +x download_vosk_model.sh
+
+    # Make sure we have unzip
+    if ! command -v unzip &> /dev/null; then
+        log_info "Installing unzip (required for Vosk model)..."
+        sudo apt install -y unzip
+    fi
+
+    # Download Vosk model with better error handling
+    if ./download_vosk_model.sh 2>&1 | tee /tmp/vosk-download.log; then
+        log_success "Vosk model downloaded!"
+
+        # Verify the model actually exists
+        if [ -f "vosk-model-small-en-us-0.15/conf/mfcc.conf" ]; then
+            log_success "Vosk model verified - 100% offline wake word enabled!"
+        else
+            log_warning "Vosk model files incomplete - will use cloud-based wake word"
+        fi
+    else
+        log_warning "Vosk model download failed - will use cloud-based wake word"
+        log_info "This is okay! Cloud-based wake word still works."
+        log_info "You can manually download later with: ./download_vosk_model.sh"
+    fi
 fi
 
 log_step "STEP 4: Configuration"
