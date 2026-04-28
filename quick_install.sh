@@ -11,7 +11,7 @@ sudo apt update -qq
 echo "Installing SDL libraries first..."
 sudo apt install -y libsdl2-dev libsdl2-mixer-dev pkg-config
 echo "Installing other dependencies..."
-sudo apt install -y git python3-pip python3-venv python3-full portaudio19-dev python3-opencv
+sudo apt install -y git python3-pip python3-venv python3-full portaudio19-dev python3-opencv python3-pygame libsdl2-dev libsdl2-mixer-dev pkg-config
 
 # Go to home and clone
 echo "[2/4] Downloading code..."
