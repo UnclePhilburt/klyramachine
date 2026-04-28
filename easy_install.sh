@@ -69,6 +69,40 @@ fi
 INSTALL_DIR="$HOME/klyramachine"
 log_info "Installation directory: $INSTALL_DIR"
 
+# Check if we need to download the code (install git first if needed)
+log_step "STEP 0: Download Klyra Code"
+if [ ! -d "$INSTALL_DIR/.git" ]; then
+    log_info "Klyra code not found, will download from GitHub..."
+
+    # Install git first if not present
+    if ! command -v git &> /dev/null; then
+        log_info "Installing git..."
+        sudo apt update -qq
+        sudo apt install -y git
+    fi
+
+    # Remove incomplete installation if exists
+    if [ -d "$INSTALL_DIR" ]; then
+        log_warning "Removing incomplete installation at $INSTALL_DIR"
+        rm -rf "$INSTALL_DIR"
+    fi
+
+    # Clone the repository
+    log_info "Cloning from https://github.com/UnclePhilburt/klyramachine.git"
+    if git clone https://github.com/UnclePhilburt/klyramachine.git "$INSTALL_DIR"; then
+        log_success "Code downloaded successfully"
+        cd "$INSTALL_DIR"
+    else
+        log_error "Failed to download code from GitHub"
+        log_info "Please check your internet connection and try again"
+        exit 1
+    fi
+else
+    log_info "Klyra code already present, updating..."
+    cd "$INSTALL_DIR"
+    git pull || log_warning "Could not update code (continuing with existing version)"
+fi
+
 log_step "STEP 1: Installing System Dependencies"
 log_info "Updating package lists..."
 if sudo apt update; then
