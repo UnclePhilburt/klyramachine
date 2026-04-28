@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Start Klyra
+Comment=Launch Klyra AI Companion
+Exec=bash -c "cd ~/klyramachine/client && source venv/bin/activate && python3 client_companion.py"
+Icon=utilities-terminal
+Terminal=true
+Categories=Application;
