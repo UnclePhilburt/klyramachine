@@ -8,7 +8,7 @@ echo "================================"
 # Install system packages
 echo "[1/4] Installing system packages..."
 sudo apt update -qq
-sudo apt install -y git python3-pip python3-venv python3-full portaudio19-dev 2>&1 | grep -v "Setting up\|Processing\|Preparing" || true
+sudo apt install -y git python3-pip python3-venv python3-full portaudio19-dev libsdl2-dev libsdl2-mixer-dev python3-opencv 2>&1 | grep -v "Setting up\|Processing\|Preparing" || true
 
 # Go to home and clone
 echo "[2/4] Downloading code..."
