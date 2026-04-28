@@ -31,14 +31,14 @@ source venv/bin/activate
 # Only install what's NOT available as system package
 pip install -q pvporcupine vosk Pillow
 
-# Config
+# Create config in client directory
+cp config.example.json config.json
+
 # Make launcher executable
 cd ~/klyramachine
 chmod +x START_KLYRA.sh
 
-cp config.example.json config.json
-
 echo ""
 echo "✅ DONE!"
 echo ""
-echo "To start Klyra, double-click: ~/klyramachine/START_KLYRA.sh
+echo "To start Klyra, double-click: ~/klyramachine/START_KLYRA.sh"
