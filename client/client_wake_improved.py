@@ -4,60 +4,159 @@ Uses optimized speech detection + Whisper transcription
 Works immediately without waiting for approval!
 """
 
-import cv2
-import pyaudio
-import wave
-import io
-import requests
-import json
-import time
-import pygame
-import sys
-import numpy as np
+print("="*60)
+print("KLYRA CLIENT STARTUP - CLOUD WAKE WORD")
+print("="*60)
+print(f"Startup time: {__import__('datetime').datetime.now()}")
+print("")
 
-print("DEBUG: All imports loaded successfully")
+print("[IMPORT] Loading Python modules...")
+import sys
+print(f"[IMPORT]   Python: {sys.version}")
+print(f"[IMPORT]   Executable: {sys.executable}")
+
+import cv2
+print(f"[IMPORT]   ✓ OpenCV {cv2.__version__}")
+
+import pyaudio
+print(f"[IMPORT]   ✓ PyAudio")
+
+import wave
+print(f"[IMPORT]   ✓ Wave")
+
+import io
+print(f"[IMPORT]   ✓ IO")
+
+import requests
+print(f"[IMPORT]   ✓ Requests {requests.__version__}")
+
+import json
+print(f"[IMPORT]   ✓ JSON")
+
+import time
+print(f"[IMPORT]   ✓ Time")
+
+import pygame
+print(f"[IMPORT]   ✓ Pygame {pygame.version.ver}")
+
+import numpy as np
+print(f"[IMPORT]   ✓ NumPy {np.__version__}")
+
+print("[IMPORT] All imports loaded successfully!")
+print("")
 
 
 class ImprovedWakeWordClient:
     def __init__(self, config_path="config.json"):
-        print("Starting Klyra - Improved Wake Word Detection...")
-        print("Step 1: Loading config...")
+        print("\n" + "="*60)
+        print("INITIALIZING KLYRA CLIENT")
+        print("="*60)
+        print("")
 
-        with open(config_path, 'r') as f:
-            self.config = json.load(f)
+        print("[STEP 1] Loading configuration file...")
+        print(f"[STEP 1]   Config path: {config_path}")
+        print(f"[STEP 1]   File exists: {__import__('os').path.exists(config_path)}")
+
+        if not __import__('os').path.exists(config_path):
+            print(f"[ERROR] Config file not found: {config_path}")
+            print(f"[ERROR] Current directory: {__import__('os').getcwd()}")
+            print(f"[ERROR] Files in directory:")
+            for f in __import__('os').listdir('.'):
+                print(f"[ERROR]   - {f}")
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+
+        try:
+            with open(config_path, 'r') as f:
+                self.config = json.load(f)
+            print("[STEP 1]   ✓ Config file parsed successfully")
+        except Exception as e:
+            print(f"[ERROR] Failed to parse config.json: {e}")
+            raise
 
         self.server_url = self.config["server_url"]
         self.client_id = self.config["client_id"]
         self.wake_word = self.config.get("wake_word", "hey klyra").lower()
-        print(f"Step 2: Config loaded - {self.server_url}")
-        print(f"   Wake word: '{self.wake_word}'")
+
+        print(f"[STEP 1]   Server URL: {self.server_url}")
+        print(f"[STEP 1]   Client ID: {self.client_id}")
+        print(f"[STEP 1]   Wake word: '{self.wake_word}'")
 
         # Initialize camera
-        print("Step 3: Starting camera...")
+        print("")
+        print("[STEP 2] Initializing camera...")
         camera_enabled = self.config.get("enable_camera", True)
+        camera_index = self.config.get("camera_index", 0)
+        print(f"[STEP 2]   Camera enabled: {camera_enabled}")
+        print(f"[STEP 2]   Camera index: {camera_index}")
+
         if camera_enabled:
-            self.camera = cv2.VideoCapture(self.config.get("camera_index", 0))
-            time.sleep(0.5)
-            print("Step 4: Camera ready!")
+            try:
+                print(f"[STEP 2]   Opening camera {camera_index}...")
+                self.camera = cv2.VideoCapture(camera_index)
+                time.sleep(0.5)
+
+                if self.camera.isOpened():
+                    ret, test_frame = self.camera.read()
+                    if ret:
+                        print(f"[STEP 2]   ✓ Camera ready! Resolution: {test_frame.shape[1]}x{test_frame.shape[0]}")
+                    else:
+                        print("[STEP 2]   ⚠ Camera opened but can't read frames")
+                else:
+                    print("[STEP 2]   ⚠ Camera failed to open, disabling camera")
+                    self.camera = None
+            except Exception as e:
+                print(f"[STEP 2]   ⚠ Camera error: {e}")
+                self.camera = None
         else:
             self.camera = None
-            print("Step 4: Camera disabled (faster responses)")
+            print("[STEP 2]   ✓ Camera disabled (faster responses)")
 
         # Initialize audio
-        print("Step 5: Starting audio...")
-        self.audio = pyaudio.PyAudio()
-        self.audio_format = pyaudio.paInt16
-        self.channels = 1
-        self.rate = 16000
-        self.chunk = 1024
-        print("Step 6: Audio ready!")
+        print("")
+        print("[STEP 3] Initializing audio system...")
+        try:
+            self.audio = pyaudio.PyAudio()
+            print(f"[STEP 3]   ✓ PyAudio initialized")
+
+            # Show available audio devices
+            device_count = self.audio.get_device_count()
+            print(f"[STEP 3]   Found {device_count} audio devices:")
+            for i in range(min(device_count, 5)):  # Show first 5
+                try:
+                    info = self.audio.get_device_info_by_index(i)
+                    if info['maxInputChannels'] > 0:
+                        print(f"[STEP 3]     - Input #{i}: {info['name']}")
+                except:
+                    pass
+
+            self.audio_format = pyaudio.paInt16
+            self.channels = 1
+            self.rate = 16000
+            self.chunk = 1024
+            print(f"[STEP 3]   Audio format: 16-bit PCM, {self.rate}Hz, {self.channels} channel(s)")
+            print("[STEP 3]   ✓ Audio ready!")
+        except Exception as e:
+            print(f"[ERROR] Audio initialization failed: {e}")
+            raise
 
         # Initialize pygame
-        print("Step 7: Starting pygame mixer...")
-        pygame.mixer.init()
-        print("Step 8: Pygame ready!")
+        print("")
+        print("[STEP 4] Initializing audio playback...")
+        try:
+            pygame.mixer.init()
+            print(f"[STEP 4]   Mixer frequency: {pygame.mixer.get_init()[0]}Hz")
+            print("[STEP 4]   ✓ Pygame mixer ready!")
+        except Exception as e:
+            print(f"[ERROR] Pygame mixer initialization failed: {e}")
+            raise
 
         self.running = False
+
+        print("")
+        print("="*60)
+        print("✓ ALL SYSTEMS READY!")
+        print("="*60)
+        print("")
 
         # Optimized settings for wake word detection
         self.speech_threshold = 400  # Lower = more sensitive

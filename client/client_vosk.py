@@ -3,20 +3,53 @@ Klyra Machine - Vosk Local Wake Word Detection
 100% offline wake word detection - no API calls!
 """
 
-import cv2
-import pyaudio
-import wave
-import io
-import requests
-import json
-import time
-import pygame
-import sys
-import numpy as np
-import os
-from vosk import Model, KaldiRecognizer
+print("="*60)
+print("KLYRA CLIENT STARTUP - VOSK OFFLINE WAKE WORD")
+print("="*60)
+print(f"Startup time: {__import__('datetime').datetime.now()}")
+print("")
 
-print("DEBUG: All imports loaded successfully")
+print("[IMPORT] Loading Python modules...")
+import sys
+print(f"[IMPORT]   Python: {sys.version}")
+print(f"[IMPORT]   Executable: {sys.executable}")
+
+import os
+print(f"[IMPORT]   ✓ OS")
+
+import cv2
+print(f"[IMPORT]   ✓ OpenCV {cv2.__version__}")
+
+import pyaudio
+print(f"[IMPORT]   ✓ PyAudio")
+
+import wave
+print(f"[IMPORT]   ✓ Wave")
+
+import io
+print(f"[IMPORT]   ✓ IO")
+
+import requests
+print(f"[IMPORT]   ✓ Requests {requests.__version__}")
+
+import json
+print(f"[IMPORT]   ✓ JSON")
+
+import time
+print(f"[IMPORT]   ✓ Time")
+
+import pygame
+print(f"[IMPORT]   ✓ Pygame {pygame.version.ver}")
+
+import numpy as np
+print(f"[IMPORT]   ✓ NumPy {np.__version__}")
+
+print(f"[IMPORT]   Loading Vosk (offline speech recognition)...")
+from vosk import Model, KaldiRecognizer
+print(f"[IMPORT]   ✓ Vosk")
+
+print("[IMPORT] All imports loaded successfully!")
+print("")
 
 
 class VoskWakeWordClient:
