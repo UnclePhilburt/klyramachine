@@ -175,7 +175,14 @@ class VoskWakeWordClient:
         print("Step 10: Pygame ready!")
 
         self.running = False
-        print("Step 11: All systems ready!\n")
+        print("Step 11: All systems ready!")
+        print("")
+
+        # Play startup ding to confirm audio output works
+        print("Step 12: Testing audio output...")
+        self.play_ding()
+        print("Step 13: Audio output test complete!")
+        print("")
 
     def record_until_silence(self, max_duration=15, silence_threshold=300, silence_duration=1.5):
         """Record audio until silence is detected"""

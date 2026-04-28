@@ -214,6 +214,12 @@ class ImprovedWakeWordClient:
         print("="*60)
         print("")
 
+        # Play startup ding to confirm audio output works
+        print("[STARTUP] Testing audio output...")
+        self.play_ding()
+        print("[STARTUP] ✓ Audio output test complete!")
+        print("")
+
         # Optimized settings for wake word detection
         self.speech_threshold = 400  # Lower = more sensitive
         self.silence_threshold = 250  # Volume below this = silence
