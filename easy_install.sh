@@ -360,11 +360,24 @@ else
     log_error "Service failed to start"
     echo ""
     log_info "Checking error logs..."
-    sudo journalctl -u klyra -n 20 --no-pager || true
+    sudo journalctl -u klyra -n 30 --no-pager || true
     echo ""
-    log_info "Trying manual test..."
-    log_info "Running: timeout 5 ./start_klyra.sh"
-    timeout 5 ./start_klyra.sh || log_warning "Manual test also failed"
+
+    # Check if we're in text mode (no audio)
+    if ! python3 -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate()" 2>/dev/null; then
+        log_warning "No audio detected - TEXT INPUT MODE required"
+        log_info "The service cannot run in text mode (requires interactive input)"
+        log_info ""
+        log_info "To use Klyra in text mode, run manually:"
+        echo "  ${GREEN}cd $INSTALL_DIR/client && python3 client_text.py${NC}"
+        log_info ""
+        log_info "Disabling auto-start service (not compatible with text mode)..."
+        sudo systemctl disable klyra.service 2>/dev/null || true
+    else
+        log_info "Trying manual test..."
+        log_info "Running: timeout 5 ./start_klyra.sh"
+        timeout 5 ./start_klyra.sh || log_warning "Manual test also failed"
+    fi
 fi
 
 echo ""
@@ -412,16 +425,29 @@ log_info "Quick test (without service):"
 echo "  ${GREEN}cd $INSTALL_DIR/client && ./start_klyra.sh${NC}"
 echo ""
 
-log_info "Klyra Features:"
-echo "  ✓ Auto-start on boot"
-echo "  ✓ Auto-update every hour"
-echo "  ✓ Auto-restart if it crashes"
-echo "  ✓ Wake word detection ('Hey Buddy')"
-echo "  ✓ Ding sound on wake word"
-echo ""
-
-log_success "Say 'Hey Buddy' to talk to Klyra!"
-echo ""
+# Check if audio is available
+if ! python3 -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate()" 2>/dev/null; then
+    log_warning "TEXT INPUT MODE (No Audio Detected)"
+    echo ""
+    log_info "To start Klyra in text mode:"
+    echo "  ${GREEN}cd $INSTALL_DIR/client && python3 client_text.py${NC}"
+    echo ""
+    log_info "In text mode:"
+    echo "  • Type your messages instead of speaking"
+    echo "  • Camera still works (if available)"
+    echo "  • Responses shown as text (no voice)"
+    echo ""
+else
+    log_info "Klyra Features:"
+    echo "  ✓ Auto-start on boot"
+    echo "  ✓ Auto-update every hour"
+    echo "  ✓ Auto-restart if it crashes"
+    echo "  ✓ Wake word detection ('Hey Buddy')"
+    echo "  ✓ Ding sound on wake word"
+    echo ""
+    log_success "Say 'Hey Buddy' to talk to Klyra!"
+    echo ""
+fi
 log_info "Installation log saved to: /tmp/service-install.log"
 log_info "Completed at: $(date)"
 echo "=========================================="
