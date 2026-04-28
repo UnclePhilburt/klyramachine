@@ -141,19 +141,32 @@ fi
 
 # Check audio devices
 log_info "Checking audio devices..."
-python -c "
-import pyaudio
-p = pyaudio.PyAudio()
-device_count = p.get_device_count()
-print(f'   Found {device_count} audio devices:')
-for i in range(device_count):
-    info = p.get_device_info_by_index(i)
-    if info['maxInputChannels'] > 0:
-        print(f'   ✓ Input #{i}: {info[\"name\"]} ({info[\"maxInputChannels\"]} channels)')
-    if info['maxOutputChannels'] > 0:
-        print(f'   ✓ Output #{i}: {info[\"name\"]} ({info[\"maxOutputChannels\"]} channels)')
-p.terminate()
-" 2>&1 || log_warning "Could not enumerate audio devices"
+AUDIO_AVAILABLE=$(python -c "
+try:
+    import pyaudio
+    p = pyaudio.PyAudio()
+    device_count = p.get_device_count()
+    print(f'   Found {device_count} audio devices:')
+    for i in range(device_count):
+        info = p.get_device_info_by_index(i)
+        if info['maxInputChannels'] > 0:
+            print(f'   ✓ Input #{i}: {info[\"name\"]} ({info[\"maxInputChannels\"]} channels)')
+        if info['maxOutputChannels'] > 0:
+            print(f'   ✓ Output #{i}: {info[\"name\"]} ({info[\"maxOutputChannels\"]} channels)')
+    p.terminate()
+    print('AUDIO_OK')
+except Exception as e:
+    print(f'   ✗ Audio not available: {e}')
+    print('AUDIO_FAILED')
+" 2>&1)
+
+if echo "$AUDIO_AVAILABLE" | grep -q "AUDIO_OK"; then
+    log_success "Audio devices available"
+    export KLYRA_TEXT_MODE=false
+else
+    log_warning "No audio devices - will use TEXT INPUT MODE"
+    export KLYRA_TEXT_MODE=true
+fi
 echo ""
 
 # Check camera
@@ -246,6 +259,13 @@ if [ "$WAKE_METHOD" != "vosk" ]; then
         log_info "Porcupine not available"
     fi
     echo ""
+fi
+
+# Check if we should use text mode instead
+if [ "$KLYRA_TEXT_MODE" = "true" ]; then
+    log_warning "Audio not available - switching to TEXT INPUT MODE"
+    CLIENT_SCRIPT="client_text.py"
+    WAKE_METHOD="text"
 fi
 
 # Final decision

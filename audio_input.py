@@ -15,16 +15,25 @@ class AudioInput:
     def __init__(self, api_key):
         """Initialize audio input and OpenAI client"""
         self.client = OpenAI(api_key=api_key)
-        self.audio = pyaudio.PyAudio()
+        self.audio = None
+        self.audio_available = False
 
-        # Audio recording parameters
-        self.format = pyaudio.paInt16
-        self.channels = 1
-        self.rate = 16000
-        self.chunk = 1024
-        self.record_seconds = 5  # Maximum recording time
+        try:
+            self.audio = pyaudio.PyAudio()
+            self.audio_available = True
 
-        print("Audio input initialized")
+            # Audio recording parameters
+            self.format = pyaudio.paInt16
+            self.channels = 1
+            self.rate = 16000
+            self.chunk = 1024
+            self.record_seconds = 5  # Maximum recording time
+
+            print("Audio input initialized")
+        except Exception as e:
+            print(f"Audio not available: {e}")
+            print("Running in TEXT INPUT mode")
+            self.audio_available = False
 
     def record_audio(self, duration=None):
         """
@@ -36,6 +45,10 @@ class AudioInput:
         Returns:
             Audio data as bytes
         """
+        if not self.audio_available:
+            print("Audio not available - use text input instead")
+            return None
+
         if duration is None:
             duration = self.record_seconds
 
@@ -136,8 +149,9 @@ class AudioInput:
 
     def cleanup(self):
         """Clean up audio resources"""
-        self.audio.terminate()
-        print("Audio input cleaned up")
+        if self.audio:
+            self.audio.terminate()
+            print("Audio input cleaned up")
 
 
 # Test the audio input module
