@@ -304,7 +304,7 @@ class VoskWakeWordClient:
     def play_ding(self):
         """Play ding sound when wake word is detected"""
         try:
-            ding_path = "ding.mp3"
+            ding_path = "ding.ogg"
             if os.path.exists(ding_path):
                 ding_sound = pygame.mixer.Sound(ding_path)
                 ding_sound.play()

@@ -399,7 +399,7 @@ class ImprovedWakeWordClient:
         """Play ding sound when wake word is detected"""
         try:
             import os
-            ding_path = "ding.mp3"
+            ding_path = "ding.ogg"
             if os.path.exists(ding_path):
                 # Use a sound effect channel instead of music to avoid conflicts
                 ding_sound = pygame.mixer.Sound(ding_path)

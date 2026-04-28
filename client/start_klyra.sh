@@ -117,7 +117,7 @@ log_info "Checking required files..."
 [ -f "config.json" ] && log_success "config.json exists" || log_error "config.json MISSING!"
 [ -f "client_wake_improved.py" ] && log_success "client_wake_improved.py exists" || log_error "client_wake_improved.py MISSING!"
 [ -f "client_vosk.py" ] && log_success "client_vosk.py exists" || log_error "client_vosk.py MISSING!"
-[ -f "ding.mp3" ] && log_success "ding.mp3 exists (wake sound)" || log_warning "ding.mp3 missing (wake will be silent)"
+[ -f "ding.ogg" ] && log_success "ding.ogg exists (wake sound)" || log_warning "ding.ogg missing (wake will be silent)"
 echo ""
 
 # Check config.json contents
