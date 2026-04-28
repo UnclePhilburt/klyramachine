@@ -7,7 +7,7 @@ Pillow>=10.0.0
 
 # Audio input/output (optional for text mode)
 pyaudio>=0.2.13
-# pygame>=2.5.0  # Only needed for audio playback - commented out for text-only installs
+pygame>=2.5.0
 
 # Audio processing and noise reduction
 scipy>=1.11.0
