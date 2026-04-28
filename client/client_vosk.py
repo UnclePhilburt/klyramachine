@@ -115,17 +115,8 @@ class VoskWakeWordClient:
 
         if not has_input:
             print("")
-            print("WARNING: ═══════════════════════════════════════════════")
             print("WARNING: NO MICROPHONE DETECTED!")
-            print("WARNING: ═══════════════════════════════════════════════")
-            print("WARNING: ")
             print("WARNING: Switching to TEXT MODE automatically...")
-            print("WARNING: ")
-            print("WARNING: To use voice mode:")
-            print("WARNING:   1. Connect a USB microphone to the Raspberry Pi")
-            print("WARNING:   2. Restart with: sudo systemctl restart klyra")
-            print("WARNING: ")
-            print("WARNING: ═══════════════════════════════════════════════")
             print("")
             self.audio.terminate()
 
@@ -139,7 +130,44 @@ class VoskWakeWordClient:
         self.channels = 1
         self.rate = 16000
         self.chunk = 4096  # Larger chunk for Vosk
-        print("Step 8: Audio ready!")
+
+        # TEST the microphone with actual recording
+        print("Step 8: Testing microphone...")
+        try:
+            test_stream = self.audio.open(
+                format=self.audio_format,
+                channels=self.channels,
+                rate=self.rate,
+                input=True,
+                frames_per_buffer=self.chunk
+            )
+
+            # Try to read a few chunks
+            for i in range(3):
+                data = test_stream.read(self.chunk, exception_on_overflow=False)
+
+            test_stream.stop_stream()
+            test_stream.close()
+
+            print("Step 9: Microphone test PASSED!")
+            print("Step 10: Audio ready!")
+
+        except Exception as e:
+            print(f"ERROR: Microphone test FAILED: {e}")
+            print("")
+            print("WARNING: ═══════════════════════════════════════════════")
+            print("WARNING: MICROPHONE NOT WORKING!")
+            print(f"WARNING: Error: {e}")
+            print("WARNING: Switching to TEXT MODE...")
+            print("WARNING: ═══════════════════════════════════════════════")
+            print("")
+            self.audio.terminate()
+
+            # Switch to text mode
+            print("INFO: Launching text mode client...")
+            import subprocess
+            subprocess.run([sys.executable, "client_text.py"])
+            sys.exit(0)
 
         # Initialize pygame for audio playback
         print("Step 9: Starting pygame mixer...")

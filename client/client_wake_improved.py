@@ -136,14 +136,7 @@ class ImprovedWakeWordClient:
                 print("")
                 print("[WARNING] ═══════════════════════════════════════════════")
                 print("[WARNING] NO MICROPHONE DETECTED!")
-                print("[WARNING] ═══════════════════════════════════════════════")
-                print("[WARNING] ")
                 print("[WARNING] Switching to TEXT MODE automatically...")
-                print("[WARNING] ")
-                print("[WARNING] To use voice mode:")
-                print("[WARNING]   1. Connect a USB microphone to the Raspberry Pi")
-                print("[WARNING]   2. Restart with: sudo systemctl restart klyra")
-                print("[WARNING] ")
                 print("[WARNING] ═══════════════════════════════════════════════")
                 print("")
                 self.audio.terminate()
@@ -159,7 +152,45 @@ class ImprovedWakeWordClient:
             self.rate = 16000
             self.chunk = 1024
             print(f"[STEP 3]   Audio format: 16-bit PCM, {self.rate}Hz, {self.channels} channel(s)")
-            print("[STEP 3]   ✓ Audio ready!")
+
+            # TEST the microphone with actual recording
+            print("[STEP 3]   Testing microphone...")
+            try:
+                test_stream = self.audio.open(
+                    format=self.audio_format,
+                    channels=self.channels,
+                    rate=self.rate,
+                    input=True,
+                    frames_per_buffer=self.chunk
+                )
+
+                # Try to read a few chunks
+                for i in range(3):
+                    data = test_stream.read(self.chunk, exception_on_overflow=False)
+
+                test_stream.stop_stream()
+                test_stream.close()
+
+                print("[STEP 3]   ✓ Microphone test PASSED!")
+                print("[STEP 3]   ✓ Audio ready!")
+
+            except Exception as e:
+                print(f"[ERROR] Microphone test FAILED: {e}")
+                print("")
+                print("[WARNING] ═══════════════════════════════════════════════")
+                print("[WARNING] MICROPHONE NOT WORKING!")
+                print(f"[WARNING] Error: {e}")
+                print("[WARNING] ═══════════════════════════════════════════════")
+                print("[WARNING] Switching to TEXT MODE...")
+                print("[WARNING] ═══════════════════════════════════════════════")
+                print("")
+                self.audio.terminate()
+
+                # Switch to text mode
+                print("[INFO] Launching text mode client...")
+                import subprocess
+                subprocess.run([sys.executable, "client_text.py"])
+                sys.exit(0)
         except Exception as e:
             print(f"[ERROR] Audio initialization failed: {e}")
             raise
