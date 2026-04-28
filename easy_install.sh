@@ -365,14 +365,16 @@ else
 
     # Check if we're in text mode (no audio)
     if ! python3 -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate()" 2>/dev/null; then
-        log_warning "No audio detected - TEXT INPUT MODE required"
+        log_warning "No audio detected - AUTO-STARTING TEXT INPUT MODE"
         log_info "The service cannot run in text mode (requires interactive input)"
-        log_info ""
-        log_info "To use Klyra in text mode, run manually:"
-        echo "  ${GREEN}cd $INSTALL_DIR/client && python3 client_text.py${NC}"
         log_info ""
         log_info "Disabling auto-start service (not compatible with text mode)..."
         sudo systemctl disable klyra.service 2>/dev/null || true
+        echo ""
+        log_success "Starting Klyra in TEXT MODE..."
+        echo ""
+        # Start text client interactively
+        python3 client_text.py
     else
         log_info "Trying manual test..."
         log_info "Running: timeout 5 ./start_klyra.sh"
