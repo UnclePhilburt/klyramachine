@@ -10,7 +10,7 @@ sudo apt install -y \
     python3-pip \
     python3-venv \
     python3-pyaudio \
-    python3-pygame \
+    python3-pygame libsdl2-2.0-0 libsdl2-mixer-2.0-0 \
     python3-opencv \
     python3-scipy \
     python3-numpy \
