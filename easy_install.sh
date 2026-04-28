@@ -446,10 +446,6 @@ else
         echo ""
         log_info "Checking error logs..."
         sudo journalctl -u klyra -n 30 --no-pager || true
-        echo ""
-        log_info "Trying manual test..."
-        log_info "Running: timeout 5 ./start_klyra.sh"
-        timeout 5 ./start_klyra.sh || log_warning "Manual test also failed"
     fi
 fi
 
