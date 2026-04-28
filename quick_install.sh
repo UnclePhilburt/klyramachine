@@ -28,6 +28,10 @@ python3 -m venv venv --system-site-packages
 source venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r requirements.txt
+# Symlink system pygame into venv
+echo "Linking system pygame..."
+PYTHON_VER=$(python3 -c "import sys; print(f'python{sys.version_info.major}.{sys.version_info.minor}')")
+ln -sf /usr/lib/$PYTHON_VER/dist-packages/pygame* venv/lib/$PYTHON_VER/site-packages/ 2>/dev/null || true
 
 # Create config
 echo "[4/4] Creating config..."
