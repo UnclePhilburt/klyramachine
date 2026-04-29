@@ -362,8 +362,8 @@ class VoskWakeWordClient:
         """
         device_count = self.audio.get_device_count()
 
-        skip_keywords = ('monitor', 'iec958', 'hdmi', 'loopback', 'output')
-        preferred = ('default source', 'pulse', 'pipewire', 'default')
+        skip_keywords = ('monitor', 'iec958', 'hdmi', 'loopback', 'output', 'sysdefault')
+        preferred = ('default source', 'pipewire', 'pulse')
 
         candidates = []
         for i in range(device_count):
