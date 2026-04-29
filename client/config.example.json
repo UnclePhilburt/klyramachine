@@ -10,5 +10,7 @@
   "vosk_model_path": "vosk-model-small-en-us-0.15",
   "porcupine_access_key": "YOUR_PORCUPINE_ACCESS_KEY_HERE",
   "stt_engine": "local",
-  "whisper_model": "tiny.en"
+  "whisper_model": "tiny.en",
+  "tts_engine": "local",
+  "piper_voice": "voices/en_US-lessac-medium.onnx"
 }

@@ -2,6 +2,9 @@
 config.json
 .env
 
+# Local TTS voices (~60MB each, fetched by download_piper_voice.sh)
+client/voices/
+
 # Python
 __pycache__/
 *.py[cod]

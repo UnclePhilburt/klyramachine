@@ -227,6 +227,15 @@ else
 fi
 
 # ----------------------------------------------------------------------------
+log_step "STEP 8b: Piper voice (offline TTS)"
+chmod +x download_piper_voice.sh
+if ./download_piper_voice.sh; then
+    log_success "Piper voice installed"
+else
+    log_warning "Piper voice download failed — TTS will fall back to cloud"
+fi
+
+# ----------------------------------------------------------------------------
 log_step "STEP 9: config.json"
 if [ -f "config.json" ]; then
     log_info "config.json exists, leaving alone"
@@ -268,7 +277,11 @@ else
     "camera_index": 0,
     "wake_word": "hey buddy",
     "enable_camera": true,
-    "vosk_model_path": "vosk-model-small-en-us-0.15"
+    "vosk_model_path": "vosk-model-small-en-us-0.15",
+    "stt_engine": "local",
+    "whisper_model": "tiny.en",
+    "tts_engine": "local",
+    "piper_voice": "voices/en_US-lessac-medium.onnx"
 }
 EOF
     log_success "config.json created"

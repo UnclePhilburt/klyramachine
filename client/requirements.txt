@@ -26,5 +26,10 @@ vosk>=0.3.45
 # if not installed, so removing this won't break existing setups.
 faster-whisper>=1.0.0
 
+# Local text-to-speech (optional). Used by client_vosk.py when
+# config.json has "tts_engine": "local". Falls back to cloud TTS
+# if not installed or if the voice model is missing.
+piper-tts>=1.2.0
+
 # Configuration
 python-dotenv>=1.0.0

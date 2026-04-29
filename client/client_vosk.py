@@ -79,6 +79,26 @@ try:
 except Exception as _e:
     print(f"[IMPORT]   ⚠  faster-whisper probe failed ({_e}); cloud STT only")
 
+# piper-tts is optional. Same pattern as faster-whisper: probe in a
+# subprocess so a native-library SIGILL can't kill Klyra at startup.
+HAVE_PIPER = False
+try:
+    import subprocess as _subproc
+    _probe = _subproc.run(
+        [sys.executable, "-c", "from piper.voice import PiperVoice"],
+        capture_output=True, timeout=30,
+    )
+    if _probe.returncode == 0:
+        from piper.voice import PiperVoice
+        print(f"[IMPORT]   ✓ piper-tts (local TTS)")
+        HAVE_PIPER = True
+    else:
+        err = (_probe.stderr or b"").decode(errors="ignore").strip().splitlines()
+        last = err[-1] if err else f"exit {_probe.returncode}"
+        print(f"[IMPORT]   ⚠  piper-tts unusable on this CPU ({last}); cloud TTS only")
+except Exception as _e:
+    print(f"[IMPORT]   ⚠  piper-tts probe failed ({_e}); cloud TTS only")
+
 print("[IMPORT] All imports loaded successfully!")
 print("")
 
@@ -133,6 +153,27 @@ class VoskWakeWordClient:
                 self.whisper = None
         elif stt_engine == "local":
             print(f"   ⚠  stt_engine=local but faster-whisper unavailable; using cloud")
+
+        # Optional local Piper TTS. Same fallback pattern as Whisper — if
+        # the package or voice file is missing, play_audio falls back to
+        # the MP3 returned by the server.
+        self.piper_voice = None
+        tts_engine = self.config.get("tts_engine", "local")
+        voice_path = self.config.get("piper_voice", "voices/en_US-lessac-medium.onnx")
+        if tts_engine == "local" and HAVE_PIPER:
+            if os.path.exists(voice_path):
+                print(f"Step 4d: Loading Piper voice '{voice_path}'...")
+                try:
+                    self.piper_voice = PiperVoice.load(voice_path)
+                    print(f"Step 4e: Piper loaded (local TTS enabled)")
+                except Exception as e:
+                    print(f"   ⚠  Piper load failed: {e}; falling back to cloud TTS")
+                    self.piper_voice = None
+            else:
+                print(f"   ⚠  Piper voice not found at {voice_path}; using cloud TTS")
+                print(f"      Run ./download_piper_voice.sh to install it")
+        elif tts_engine == "local":
+            print(f"   ⚠  tts_engine=local but piper-tts unavailable; using cloud")
 
         # Initialize camera
         print("Step 5: Starting camera...")
@@ -350,19 +391,37 @@ class VoskWakeWordClient:
         _, buffer = cv2.imencode('.jpg', frame)
         return buffer.tobytes()
 
-    def play_audio(self, audio_data):
-        """Play audio"""
+    def play_audio(self, audio_data, fmt="mp3"):
+        """Play audio bytes. fmt is 'mp3' (cloud) or 'wav' (local Piper)."""
         try:
+            ext = "wav" if fmt == "wav" else "mp3"
+            path = f"temp_response.{ext}"
             pygame.mixer.music.unload()
-            with open("temp_response.mp3", 'wb') as f:
+            with open(path, 'wb') as f:
                 f.write(audio_data)
-            pygame.mixer.music.load("temp_response.mp3")
+            pygame.mixer.music.load(path)
             pygame.mixer.music.play()
             while pygame.mixer.music.get_busy():
                 time.sleep(0.1)
             pygame.mixer.music.unload()
         except Exception as e:
             print(f"Audio playback error: {e}")
+
+    def synthesize_local(self, text):
+        """Synthesize text to WAV bytes via Piper. Returns None on failure."""
+        if not self.piper_voice or not text:
+            return None
+        try:
+            import wave, io
+            t0 = time.time()
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as wav_file:
+                self.piper_voice.synthesize_wav(text, wav_file)
+            print(f"   [piper] {time.time()-t0:.2f}s")
+            return buf.getvalue()
+        except Exception as e:
+            print(f"   ⚠  Local TTS failed: {e}; falling back to cloud audio")
+            return None
 
     def play_ding(self):
         """Play ding sound when wake word is detected"""
@@ -399,6 +458,7 @@ class VoskWakeWordClient:
 
             if response.status_code == 200:
                 import base64
+                response_text = ""
                 response_text_b64 = response.headers.get("X-Response-Text-B64", "")
                 if response_text_b64:
                     try:
@@ -407,8 +467,14 @@ class VoskWakeWordClient:
                     except:
                         pass
 
-                if len(response.content) > 0:
-                    self.play_audio(response.content)
+                # Prefer local Piper synthesis if loaded; fall back to the
+                # MP3 the server returned. This way existing setups without
+                # Piper keep working unchanged.
+                local_wav = self.synthesize_local(response_text) if self.piper_voice else None
+                if local_wav:
+                    self.play_audio(local_wav, fmt="wav")
+                elif len(response.content) > 0:
+                    self.play_audio(response.content, fmt="mp3")
 
         except Exception as e:
             print(f"Error: {e}")
