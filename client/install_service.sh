@@ -355,22 +355,33 @@ if [ "$lockdown_choice" = "yes" ] || [ "$lockdown_choice" = "y" ]; then
         log_info "klyra user already exists"
     fi
 
+    # Give klyra access to hardware (mic, camera, GPU)
+    log_info "Adding klyra to audio/video/render/input groups..."
+    sudo usermod -a -G audio,video,render,input klyra
+    log_success "klyra added to hardware groups"
+
+    # Allow klyra to traverse into the install owner's home dir
+    log_info "Granting klyra traversal access to $HOME..."
+    sudo chmod o+x "$HOME"
+    log_success "$HOME is now traversable"
+
     # Change ownership to klyra user
     log_info "Changing ownership to klyra user..."
     if sudo chown -R klyra:klyra "$SCRIPT_DIR/.."; then
         log_success "Ownership changed"
     fi
 
-    # Restrict permissions
-    log_info "Setting read-only permissions..."
-    if sudo chmod -R 500 "$SCRIPT_DIR/.."; then
+    # Restrict permissions: klyra rwx, others nothing
+    # rwx (not r-x) so auto-update can git pull
+    log_info "Setting klyra-only permissions..."
+    if sudo chmod -R u=rwX,go= "$SCRIPT_DIR/.."; then
         log_success "Permissions restricted"
     fi
 
     # Make config.json unreadable except by klyra user
     if [ -f "$SCRIPT_DIR/config.json" ]; then
         log_info "Securing config.json..."
-        sudo chmod 400 "$SCRIPT_DIR/config.json"
+        sudo chmod 600 "$SCRIPT_DIR/config.json"
         log_success "config.json secured"
     fi
 
@@ -381,18 +392,65 @@ if [ "$lockdown_choice" = "yes" ] || [ "$lockdown_choice" = "y" ]; then
         log_success "conversations directory secured"
     fi
 
-    # Hide .git directory
-    if [ -d "$SCRIPT_DIR/../.git" ]; then
-        log_info "Hiding .git directory..."
-        sudo chmod 700 "$SCRIPT_DIR/../.git"
-        log_success ".git directory hidden"
+    # .git directory is already restricted by the recursive chmod above
+
+    # Rewrite the systemd service files to run as klyra
+    log_info "Updating systemd service to run as klyra..."
+    sudo tee "$SERVICE_FILE" > /dev/null <<EOF
+[Unit]
+Description=Klyra AI Companion
+After=network.target sound.target
+
+[Service]
+Type=simple
+User=klyra
+Group=klyra
+SupplementaryGroups=audio video render input
+WorkingDirectory=$SCRIPT_DIR
+Environment="HOME=$SCRIPT_DIR"
+Environment="PYTHONUNBUFFERED=1"
+Environment="DISPLAY=:0"
+Environment="XDG_RUNTIME_DIR=/tmp"
+ExecStart=/bin/bash $SCRIPT_DIR/start_klyra.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    log_success "klyra.service updated for klyra user"
+
+    if [ -f "$UPDATE_SERVICE" ]; then
+        log_info "Updating klyra-update.service to run as klyra..."
+        sudo tee "$UPDATE_SERVICE" > /dev/null <<SERVICEEOF
+[Unit]
+Description=Klyra Auto-Update
+After=network.target
+
+[Service]
+Type=oneshot
+User=klyra
+Group=klyra
+WorkingDirectory=$PARENT_DIR
+Environment="HOME=$SCRIPT_DIR"
+ExecStart=/bin/bash $SCRIPT_DIR/auto_update.sh
+StandardOutput=journal
+StandardError=journal
+SERVICEEOF
+        log_success "klyra-update.service updated for klyra user"
     fi
+
+    log_info "Reloading systemd daemon..."
+    sudo systemctl daemon-reload
 
     echo ""
     log_success "Security lockdown enabled!"
-    log_info "  - Code: Read-only for klyra user only"
-    log_info "  - Config: Hidden from all users except klyra"
+    log_info "  - Code: Owned by klyra, hidden from other users"
+    log_info "  - Config: Klyra-only readable"
     log_info "  - Conversations: Private"
+    log_info "  - Service: Runs as klyra with audio/video/render/input access"
 else
     log_info "Security lockdown skipped."
 fi

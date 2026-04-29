@@ -1,283 +1,172 @@
 #!/bin/bash
-# Easy Installer for Klyra Machine
-# One-click setup for Raspberry Pi
+# Klyra Machine — Installer
+# One-command setup for a Raspberry Pi (or any aarch64/x86_64 Linux).
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/UnclePhilburt/klyramachine/main/easy_install.sh | bash
+#
+# Optional env vars:
+#   KLYRA_REPO_URL    — repo to clone (default: github)
+#   KLYRA_REPO_BRANCH — branch (default: main)
+#   KLYRA_INSTALL_DIR — install location (default: $HOME/klyramachine)
+#   KLYRA_LOCKDOWN    — yes|no, dedicated klyra user + restricted perms (default: no)
+#   KLYRA_SKIP_CLONE  — 1 to skip git clone (use existing $KLYRA_INSTALL_DIR; for local testing)
 
-set -e  # Exit on error
-# set -x  # Uncomment for extreme debugging (shows every command)
+set -e
+set -o pipefail
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+KLYRA_REPO_URL="${KLYRA_REPO_URL:-https://github.com/UnclePhilburt/klyramachine.git}"
+KLYRA_REPO_BRANCH="${KLYRA_REPO_BRANCH:-main}"
+KLYRA_INSTALL_DIR="${KLYRA_INSTALL_DIR:-$HOME/klyramachine}"
+KLYRA_LOCKDOWN="${KLYRA_LOCKDOWN:-no}"
+KLYRA_SKIP_CLONE="${KLYRA_SKIP_CLONE:-0}"
+PYTHON_VERSION="3.12"
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-log_step() {
-    echo ""
-    echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}$1${NC}"
-    echo -e "${GREEN}========================================${NC}"
-}
+RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; BLUE=$'\033[0;34m'; NC=$'\033[0m'
+log_info()    { echo "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo "${GREEN}[OK]${NC} $1"; }
+log_warning() { echo "${YELLOW}[WARN]${NC} $1"; }
+log_error()   { echo "${RED}[ERROR]${NC} $1"; }
+log_step()    { echo; echo "${GREEN}========================================${NC}"; echo "${GREEN}$1${NC}"; echo "${GREEN}========================================${NC}"; }
 
 echo "=========================================="
-echo "   KLYRA MACHINE - EASY INSTALLER"
-echo "   (Verbose Debug Mode)"
+echo "   KLYRA MACHINE — INSTALLER"
 echo "=========================================="
-echo ""
+echo
+log_info "Started: $(date)"
+log_info "User:    $USER"
+log_info "Install: $KLYRA_INSTALL_DIR"
+log_info "Repo:    $KLYRA_REPO_URL ($KLYRA_REPO_BRANCH)"
+log_info "Python:  $PYTHON_VERSION (managed by uv)"
+log_info "Lockdown: $KLYRA_LOCKDOWN"
 
-log_info "Installer started at: $(date)"
-log_info "Running as user: $USER"
-log_info "Home directory: $HOME"
-log_info "Current directory: $(pwd)"
-log_info "OS Type: $OSTYPE"
-
-# Check if running on Raspberry Pi or Linux
 if [[ ! "$OSTYPE" == "linux-gnu"* ]]; then
-    log_error "This installer is for Linux/Raspberry Pi only"
-    log_info "For Windows, see the client folder for manual setup"
+    log_error "This installer is for Linux only (got: $OSTYPE)"
     exit 1
 fi
-
-log_success "OS check passed"
-
-# Detect Raspberry Pi
 if [ -f /proc/device-tree/model ]; then
-    PI_MODEL=$(cat /proc/device-tree/model)
-    log_info "Detected: $PI_MODEL"
+    log_info "Hardware: $(tr -d '\0' < /proc/device-tree/model)"
 else
-    log_info "Running on generic Linux system"
+    log_info "Hardware: generic Linux ($(uname -m))"
 fi
 
-# Get current directory
-INSTALL_DIR="$HOME/klyramachine"
-log_info "Installation directory: $INSTALL_DIR"
+# ----------------------------------------------------------------------------
+log_step "STEP 1: System libraries (apt)"
+log_info "Updating apt..."
+sudo apt-get update -qq
+log_info "Installing system C libraries needed at runtime/build..."
+# Python wheels handle the Python side; apt only provides system C libs.
+sudo apt-get install -y --no-install-recommends \
+    git curl unzip ca-certificates \
+    build-essential \
+    portaudio19-dev libasound2-dev \
+    libsdl2-2.0-0 libsdl2-mixer-2.0-0
+sudo apt-get install -y libatlas-base-dev 2>/dev/null || log_warning "libatlas-base-dev unavailable (optional perf)"
+sudo apt-get install -y libopenblas-dev  2>/dev/null || log_warning "libopenblas-dev unavailable (optional perf)"
+log_success "System libraries installed"
 
-log_step "STEP 1: Installing System Dependencies"
-log_info "Updating package lists..."
-if sudo apt update; then
-    log_success "Package lists updated"
-else
-    log_error "Failed to update package lists"
-    exit 1
+# ----------------------------------------------------------------------------
+log_step "STEP 2: uv (Python toolchain)"
+export PATH="$HOME/.local/bin:$PATH"
+if ! command -v uv &>/dev/null; then
+    log_info "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
 fi
+log_success "uv $(uv --version | awk '{print $2}')"
 
-log_info "Installing required packages..."
-log_info "  - git (version control)"
-log_info "  - python3-pip (Python package manager)"
-log_info "  - python3-venv (virtual environments)"
-log_info "  - python3-dev (Python development headers)"
-log_info "  - build-essential (compiler tools)"
-log_info "  - python3-pyaudio (audio input/output)"
-log_info "  - portaudio19-dev (audio library)"
-log_info "  - python3-opencv (camera/vision)"
-log_info "  - python3-scipy (scientific computing)"
-log_info "  - python3-numpy (numerical arrays)"
+# ----------------------------------------------------------------------------
+log_step "STEP 3: Python $PYTHON_VERSION"
+uv python install "$PYTHON_VERSION"
+log_success "Python $PYTHON_VERSION ready"
 
-# Install core packages first
-if sudo apt install -y git python3-pip python3-venv python3-dev build-essential python3-pyaudio portaudio19-dev python3-opencv python3-scipy python3-numpy; then
-    log_success "Core system dependencies installed"
+# ----------------------------------------------------------------------------
+log_step "STEP 4: Klyra source"
+if [ "$KLYRA_SKIP_CLONE" = "1" ]; then
+    log_info "KLYRA_SKIP_CLONE=1 — using existing $KLYRA_INSTALL_DIR"
+    [ -d "$KLYRA_INSTALL_DIR/client" ] || { log_error "$KLYRA_INSTALL_DIR/client not found"; exit 1; }
+elif [ -d "$KLYRA_INSTALL_DIR/.git" ]; then
+    log_info "Existing checkout found — stopping service if running"
+    sudo systemctl stop klyra.service 2>/dev/null || true
+    log_info "Updating existing checkout..."
+    cd "$KLYRA_INSTALL_DIR"
+    git fetch origin
+    git checkout "$KLYRA_REPO_BRANCH"
+    git reset --hard "origin/$KLYRA_REPO_BRANCH"
 else
-    log_error "Failed to install core system dependencies"
-    exit 1
-fi
-
-# Try to install optional OpenCV dependencies (may not exist on all Pi versions)
-log_info "Installing optional OpenCV dependencies..."
-if sudo apt install -y libatlas-base-dev 2>/dev/null; then
-    log_success "libatlas-base-dev installed"
-else
-    log_warning "libatlas-base-dev not available (optional)"
-fi
-
-if sudo apt install -y libopenblas-dev 2>/dev/null; then
-    log_success "libopenblas-dev installed"
-else
-    log_warning "libopenblas-dev not available (optional)"
-fi
-
-# Verify key installations
-log_info "Verifying installations..."
-git --version && log_success "git installed: $(git --version)"
-python3 --version && log_success "python3 installed: $(python3 --version)"
-pip3 --version && log_success "pip3 installed: $(pip3 --version)"
-
-log_step "STEP 2: Downloading Klyra Machine"
-
-if [ -d "$INSTALL_DIR" ]; then
-    log_warning "Klyra already exists at $INSTALL_DIR"
-    log_info "Directory size: $(du -sh $INSTALL_DIR 2>/dev/null | cut -f1 || echo 'unknown')"
-
-    # Stop the service if it's running
-    if systemctl is-active klyra.service &>/dev/null; then
-        log_info "Stopping running service..."
-        sudo systemctl stop klyra.service
-        log_success "Service stopped"
+    if [ -d "$KLYRA_INSTALL_DIR" ]; then
+        log_warning "$KLYRA_INSTALL_DIR exists but is not a git repo — removing"
+        rm -rf "$KLYRA_INSTALL_DIR"
     fi
-
-    log_info "Automatically removing old installation for fresh install..."
-    rm -rf "$INSTALL_DIR"
-    log_success "Old installation removed"
+    log_info "Cloning $KLYRA_REPO_URL ($KLYRA_REPO_BRANCH)..."
+    git clone --branch "$KLYRA_REPO_BRANCH" "$KLYRA_REPO_URL" "$KLYRA_INSTALL_DIR"
 fi
+cd "$KLYRA_INSTALL_DIR"
+log_success "Klyra at $KLYRA_INSTALL_DIR ($(git rev-parse --short HEAD 2>/dev/null || echo 'no-git'))"
 
-log_info "Cloning from GitHub: https://github.com/UnclePhilburt/klyramachine.git"
-if git clone https://github.com/UnclePhilburt/klyramachine.git "$INSTALL_DIR"; then
-    log_success "Repository cloned successfully"
-    log_info "Repository size: $(du -sh $INSTALL_DIR | cut -f1)"
-else
-    log_error "Failed to clone repository"
-    log_info "Check your internet connection and try again"
-    exit 1
-fi
+# ----------------------------------------------------------------------------
+log_step "STEP 5: Python environment"
+cd "$KLYRA_INSTALL_DIR/client"
+log_info "Creating venv (Python $PYTHON_VERSION)..."
+uv venv --python "$PYTHON_VERSION" venv
+log_info "Installing requirements.txt..."
+uv pip install --python venv/bin/python -r requirements.txt
+log_info "Installing pygame (audio playback)..."
+uv pip install --python venv/bin/python pygame
+log_info "Installing webrtcvad (better speech detection — optional)..."
+uv pip install --python venv/bin/python webrtcvad || log_warning "webrtcvad install failed; client will use volume-based fallback"
+log_success "Python environment ready"
 
-log_info "Changing to client directory: $INSTALL_DIR/client"
-cd "$INSTALL_DIR/client"
-log_info "Current directory: $(pwd)"
-log_info "Files in client directory:"
-ls -lah | head -15
-
-log_step "STEP 3: Setting up Python Environment"
-
-# Create virtual environment
-if [ ! -d "venv" ]; then
-    log_info "Creating virtual environment..."
-    log_info "Command: python3 -m venv venv --system-site-packages"
-
-    if python3 -m venv venv --system-site-packages; then
-        log_success "Virtual environment created"
-        log_info "venv size: $(du -sh venv | cut -f1)"
-    else
-        log_error "Failed to create virtual environment"
-        exit 1
-    fi
-else
-    log_info "Virtual environment already exists"
-fi
-
-# Activate virtual environment
-log_info "Activating virtual environment..."
-source venv/bin/activate
-
-if [ -n "$VIRTUAL_ENV" ]; then
-    log_success "Virtual environment activated: $VIRTUAL_ENV"
-    log_info "Python: $(which python)"
-    log_info "Pip: $(which pip)"
-else
-    log_error "Failed to activate virtual environment"
-    exit 1
-fi
-
-log_info "Installing Python dependencies from requirements.txt..."
-log_info "Requirements file contents:"
-cat requirements.txt
-
-echo ""
-log_info "Running: pip install -r requirements.txt"
-if pip install -r requirements.txt 2>&1 | tee /tmp/pip-install.log; then
-    log_success "Python dependencies installed"
-else
-    log_warning "Some packages may have failed to install"
-    log_info "Check /tmp/pip-install.log for details"
-fi
-
-log_info "Note: webrtcvad might fail to build - that's okay, fallback speech detection will be used"
-
-log_info "Installed Python packages:"
-pip list | grep -E "requests|opencv|pygame|pyaudio|numpy|scipy|pvporcupine|vosk" || log_info "Listing all packages..."
-pip list
-
-log_step "STEP 3.5: Configuring Audio System (ALSA)"
-
-log_info "Fixing ALSA configuration to prevent spam errors..."
-
-# Create ALSA config to suppress errors about missing surround sound configs
+# ----------------------------------------------------------------------------
+log_step "STEP 6: ALSA config"
 if [ ! -f /etc/asound.conf ]; then
-    log_info "Creating /etc/asound.conf..."
-    sudo tee /etc/asound.conf > /dev/null <<'ALSAEOF'
-# Simple ALSA configuration for Raspberry Pi
-# Prevents errors about missing surround sound configurations
-
-pcm.!default {
-    type hw
-    card 0
-}
-
-ctl.!default {
-    type hw
-    card 0
-}
+    log_info "Writing /etc/asound.conf (suppresses surround-sound errors)..."
+    sudo tee /etc/asound.conf >/dev/null <<'ALSAEOF'
+pcm.!default { type hw; card 0 }
+ctl.!default { type hw; card 0 }
 ALSAEOF
-    log_success "ALSA configuration created"
+    log_success "/etc/asound.conf written"
 else
-    log_info "/etc/asound.conf already exists, skipping"
+    log_info "/etc/asound.conf already exists, leaving alone"
 fi
 
-log_step "STEP 3.6: Setting up Vosk Model (Offline Wake Word)"
-
-log_info "Checking Vosk model for 100% local wake word detection..."
-
-# Check if model already exists (from git clone)
-if [ -f "vosk-model-small-en-us-0.15/conf/mfcc.conf" ]; then
-    log_success "Vosk model already present from repository!"
-    log_info "Model size: $(du -sh vosk-model-small-en-us-0.15 | cut -f1)"
-    log_success "100% offline wake word enabled!"
+# ----------------------------------------------------------------------------
+log_step "STEP 7: Vosk model (offline wake word)"
+chmod +x download_vosk_model.sh
+if ./download_vosk_model.sh; then
+    log_success "Vosk model installed (1st try)"
+elif log_warning "First attempt failed, retrying..." && ./download_vosk_model.sh; then
+    log_success "Vosk model installed (2nd try)"
 else
-    log_info "Vosk model not in repository, downloading..."
-    log_info "This is a one-time download (~40MB)"
-
-    chmod +x download_vosk_model.sh
-
-    # Make sure we have unzip
-    if ! command -v unzip &> /dev/null; then
-        log_info "Installing unzip (required for Vosk model)..."
-        sudo apt install -y unzip
-    fi
-
-    # Download Vosk model with better error handling
-    if ./download_vosk_model.sh 2>&1 | tee /tmp/vosk-download.log; then
-        log_success "Vosk model downloaded!"
-
-        # Verify the model actually exists
-        if [ -f "vosk-model-small-en-us-0.15/conf/mfcc.conf" ]; then
-            log_success "Vosk model verified - 100% offline wake word enabled!"
-        else
-            log_warning "Vosk model files incomplete - will use cloud-based wake word"
-        fi
-    else
-        log_warning "Vosk model download failed - will use cloud-based wake word"
-        log_info "This is okay! Cloud-based wake word still works."
-        log_info "You can manually download later with: ./download_vosk_model.sh"
-    fi
+    log_warning "Vosk model download failed both times — wake word will fall back to cloud Whisper"
 fi
 
-log_step "STEP 4: Configuration"
-
-# Check if config already exists
+# ----------------------------------------------------------------------------
+log_step "STEP 8: config.json"
 if [ -f "config.json" ]; then
-    log_info "Config file already exists"
-    log_info "Current config:"
-    cat config.json | head -20
+    log_info "config.json exists, leaving alone"
+    log_info "client_id: $(python3 -c "import json;print(json.load(open('config.json'))['client_id'])" 2>/dev/null || echo '?')"
 else
-    log_info "Creating config file..."
-    CLIENT_ID="raspberry_pi_$(hostname)"
-    log_info "Client ID: $CLIENT_ID"
-
+    HOSTNAME_SHORT=$(hostname | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g')
+    MAC_SUFFIX=""
+    for iface in wlan0 eth0 wlp0s1 enp0s3 end0; do
+        if [ -f "/sys/class/net/$iface/address" ]; then
+            MAC_SUFFIX=$(tr -d : < "/sys/class/net/$iface/address" | tail -c 7)
+            [ -n "$MAC_SUFFIX" ] && break
+        fi
+    done
+    if [ -z "$MAC_SUFFIX" ]; then
+        # Last resort: any non-loopback interface
+        for f in /sys/class/net/*/address; do
+            iface=$(basename "$(dirname "$f")")
+            [ "$iface" = "lo" ] && continue
+            MAC_SUFFIX=$(tr -d : < "$f" | tail -c 7)
+            [ -n "$MAC_SUFFIX" ] && break
+        done
+    fi
+    [ -z "$MAC_SUFFIX" ] && MAC_SUFFIX=$(head -c 4 /dev/urandom | xxd -p)
+    CLIENT_ID="klyra-${HOSTNAME_SHORT}-${MAC_SUFFIX}"
+    log_info "Generated client_id: $CLIENT_ID"
     cat > config.json <<EOF
 {
     "server_url": "https://klyramachine.onrender.com",
@@ -288,235 +177,113 @@ else
     "vosk_model_path": "vosk-model-small-en-us-0.15"
 }
 EOF
-
-    if [ -f "config.json" ]; then
-        log_success "Config file created"
-        log_info "Config contents:"
-        cat config.json
-    else
-        log_error "Failed to create config file"
-        exit 1
-    fi
+    log_success "config.json created"
 fi
 
-log_info "Server URL: https://klyramachine.onrender.com"
-log_info "Testing server connection..."
-if curl -s --max-time 10 https://klyramachine.onrender.com/ > /dev/null 2>&1; then
-    log_success "Server is reachable"
+# ----------------------------------------------------------------------------
+log_step "STEP 9: systemd service"
+chmod +x install_service.sh start_klyra.sh auto_update.sh
+log_info "Running install_service.sh (lockdown=$KLYRA_LOCKDOWN)..."
+# install_service.sh has an interactive 'read -p' for lockdown — feed it our choice.
+echo "$KLYRA_LOCKDOWN" | ./install_service.sh
+log_success "Service installed"
+
+# ----------------------------------------------------------------------------
+log_step "STEP 10: Start service"
+sudo systemctl start klyra
+sleep 3
+
+# ----------------------------------------------------------------------------
+log_step "PRE-FLIGHT CHECKS"
+
+PASS_COUNT=0
+FAIL_COUNT=0
+WARN_COUNT=0
+check() {
+    local label="$1"; local result="$2"; local detail="$3"
+    case "$result" in
+        pass) log_success "  $label  $detail"; PASS_COUNT=$((PASS_COUNT+1)) ;;
+        warn) log_warning "  $label  $detail"; WARN_COUNT=$((WARN_COUNT+1)) ;;
+        fail) log_error   "  $label  $detail"; FAIL_COUNT=$((FAIL_COUNT+1)) ;;
+    esac
+}
+
+CLIENT_ID_VAL=$(python3 -c "import json;print(json.load(open('config.json'))['client_id'])" 2>/dev/null || echo "?")
+check "client_id      " pass "$CLIENT_ID_VAL"
+
+if curl -fsSL --max-time 15 https://klyramachine.onrender.com/ >/dev/null 2>&1; then
+    check "server         " pass "https://klyramachine.onrender.com (reachable)"
 else
-    log_warning "Server connection test failed (might be sleeping, will wake up on first request)"
+    check "server         " warn "no response (may be sleeping; will wake on first request)"
 fi
 
-log_info "Checking for ding.mp3..."
-if [ -f "ding.mp3" ]; then
-    log_success "ding.mp3 found (wake word sound)"
-    log_info "File size: $(ls -lh ding.mp3 | awk '{print $5}')"
-else
-    log_warning "ding.mp3 not found (wake word will be silent)"
-fi
-
-log_step "STEP 5: Setting up Auto-Start Service"
-
-log_info "Making scripts executable..."
-chmod +x install_service.sh && log_success "install_service.sh is executable"
-chmod +x start_klyra.sh && log_success "start_klyra.sh is executable"
-chmod +x auto_update.sh && log_success "auto_update.sh is executable"
-
-log_info "Script permissions:"
-ls -lh install_service.sh start_klyra.sh auto_update.sh
-
-echo ""
-log_info "Running service installer (this will create systemd services)..."
-log_info "You may be prompted for your sudo password..."
-echo ""
-
-if ./install_service.sh 2>&1 | tee /tmp/service-install.log; then
-    log_success "Service installation completed"
-else
-    log_error "Service installation failed"
-    log_info "Check /tmp/service-install.log for details"
-    log_info "You can still run manually: cd $INSTALL_DIR/client && ./start_klyra.sh"
-fi
-
-echo ""
-log_step "STEP 6: Starting Klyra Service"
-
-log_info "Starting Klyra service..."
-if sudo systemctl start klyra 2>&1 | tee -a /tmp/service-install.log; then
-    log_success "Service start command executed"
-    sleep 3  # Give it time to start
-else
-    log_warning "Service start command had issues"
-fi
-
-echo ""
-log_info "========================================"
-log_info "AUDIO DETECTION TEST (EXTREME DEBUG)"
-log_info "========================================"
-log_info "Testing PyAudio availability and actual audio devices..."
-
-# More robust audio test - check if there are actual input devices
-AUDIO_TEST_OUTPUT=$(python3 -c "
-import pyaudio
-import sys
+MIC_OK=$(venv/bin/python - <<'PY' 2>/dev/null
 try:
+    import pyaudio
     p = pyaudio.PyAudio()
-    device_count = p.get_device_count()
-    input_devices = 0
-    for i in range(device_count):
-        info = p.get_device_info_by_index(i)
-        if info['maxInputChannels'] > 0:
-            input_devices += 1
-            print(f'Found input device: {info[\"name\"]}')
+    n = sum(1 for i in range(p.get_device_count()) if p.get_device_info_by_index(i)['maxInputChannels'] > 0)
     p.terminate()
-    if input_devices > 0:
-        print(f'RESULT: {input_devices} input devices found')
-        sys.exit(0)
-    else:
-        print('RESULT: No input devices found')
-        sys.exit(1)
-except Exception as e:
-    print(f'ERROR: {e}')
-    sys.exit(1)
-" 2>&1 | tee /tmp/audio-test.log; echo "EXIT_CODE: $?")
-
-echo "$AUDIO_TEST_OUTPUT"
-if echo "$AUDIO_TEST_OUTPUT" | grep -q "EXIT_CODE: 0"; then
-    AUDIO_RESULT="AUDIO_AVAILABLE"
-    log_success "Audio test PASSED - input devices detected"
+    print(n)
+except Exception:
+    print(0)
+PY
+)
+if [ "${MIC_OK:-0}" -gt 0 ]; then
+    check "mic            " pass "$MIC_OK input device(s)"
 else
-    AUDIO_RESULT="NO_AUDIO"
-    log_warning "Audio test FAILED - no input devices found"
-fi
-log_info "Audio test result: $AUDIO_RESULT"
-log_info "Full test output:"
-cat /tmp/audio-test.log || true
-echo ""
-
-# Check if we're in text mode FIRST (before checking service)
-if [ "$AUDIO_RESULT" = "NO_AUDIO" ]; then
-    log_warning "========================================"
-    log_warning "NO AUDIO DETECTED - ENTERING TEXT MODE"
-    log_warning "========================================"
-    echo ""
-    log_info "[DEBUG] Current directory: $(pwd)"
-    log_info "[DEBUG] Target directory: $INSTALL_DIR/client"
-    log_info "[DEBUG] Checking if client_text.py exists..."
-    if [ -f "$INSTALL_DIR/client/client_text.py" ]; then
-        log_success "[DEBUG] client_text.py found!"
-        log_info "[DEBUG] File size: $(ls -lh $INSTALL_DIR/client/client_text.py | awk '{print $5}')"
-    else
-        log_error "[DEBUG] client_text.py NOT FOUND!"
-        log_info "[DEBUG] Listing client directory:"
-        ls -la "$INSTALL_DIR/client/" | head -20
-    fi
-    echo ""
-    log_info "[DEBUG] Disabling auto-start service..."
-    sudo systemctl disable klyra.service 2>&1 | head -5 || true
-    log_info "[DEBUG] Stopping service..."
-    sudo systemctl stop klyra.service 2>&1 | head -5 || true
-    log_info "[DEBUG] Service disabled and stopped"
-    echo ""
-    log_success "==================================================="
-    log_success "  LAUNCHING KLYRA TEXT MODE NOW"
-    log_success "==================================================="
-    log_info "[DEBUG] Changing to client directory..."
-    cd "$INSTALL_DIR/client" || { log_error "[DEBUG] Failed to cd!"; exit 1; }
-    log_success "[DEBUG] Now in: $(pwd)"
-    log_info "[DEBUG] Python3 path: $(which python3)"
-    log_info "[DEBUG] Python3 version: $(python3 --version)"
-    log_info "[DEBUG] About to exec: python3 client_text.py"
-    log_info "[DEBUG] This is the last line before text client starts"
-    echo ""
-    echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-    echo "EXECUTING: python3 client_text.py"
-    echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-    echo ""
-    # Start text client interactively directly (skip start_klyra.sh)
-    exec python3 client_text.py
-else
-    log_info "Checking service status..."
-    if systemctl is-active klyra.service &>/dev/null; then
-        log_success "✓ Klyra is running!"
-        echo ""
-        log_info "Service output (last 10 lines):"
-        sudo journalctl -u klyra -n 10 --no-pager | tail -10 || true
-    else
-        log_error "Service failed to start"
-        echo ""
-        log_info "Checking error logs..."
-        sudo journalctl -u klyra -n 30 --no-pager || true
-    fi
+    check "mic            " warn "none — Klyra will run text-only"
 fi
 
-echo ""
-log_step "INSTALLATION COMPLETE!"
-
-log_success "Klyra Machine has been installed successfully!"
-echo ""
-
-log_info "Installation Summary:"
-log_info "  Location: $INSTALL_DIR"
-log_info "  Client: client_wake_improved.py or client_vosk.py (auto-detected)"
-log_info "  Wake word: 'hey buddy'"
-log_info "  Server: https://klyramachine.onrender.com"
-echo ""
-
-log_info "System Service Status:"
-if systemctl is-enabled klyra.service &>/dev/null; then
-    log_success "klyra.service is enabled (will auto-start on boot)"
+if venv/bin/python -c "import cv2; c=cv2.VideoCapture(0); ok=c.isOpened(); c.release(); exit(0 if ok else 1)" 2>/dev/null; then
+    check "camera         " pass "/dev/video0 opens"
 else
-    log_warning "klyra.service is not enabled"
+    check "camera         " warn "none — Klyra will skip vision"
+fi
+
+if [ -f "vosk-model-small-en-us-0.15/mfcc.conf" ]; then
+    check "vosk model     " pass "complete"
+else
+    check "vosk model     " warn "incomplete — wake word uses cloud Whisper"
 fi
 
 if systemctl is-active klyra.service &>/dev/null; then
-    log_success "klyra.service is RUNNING ✓"
+    check "klyra.service  " pass "running"
 else
-    log_warning "klyra.service is NOT running - check logs above"
+    check "klyra.service  " fail "NOT running — see: sudo journalctl -u klyra -n 50"
+fi
+if systemctl is-enabled klyra.service &>/dev/null; then
+    check "autostart      " pass "enabled at boot"
+else
+    check "autostart      " fail "NOT enabled"
 fi
 
-if systemctl is-enabled klyra-update.timer &>/dev/null; then
-    log_success "klyra-update.timer is enabled (auto-updates every hour)"
+if systemctl is-active klyra-update.timer &>/dev/null; then
+    check "auto-update    " pass "every hour (systemd timer)"
+elif crontab -l 2>/dev/null | grep -q auto_update; then
+    check "auto-update    " pass "every hour (cron fallback)"
 else
-    log_warning "klyra-update.timer is not enabled"
+    check "auto-update    " fail "NOT scheduled"
 fi
 
-echo ""
-log_info "Commands to control Klyra:"
-echo "  Start:   ${GREEN}sudo systemctl start klyra${NC}"
-echo "  Stop:    ${YELLOW}sudo systemctl stop klyra${NC}"
-echo "  Restart: ${BLUE}sudo systemctl restart klyra${NC}"
-echo "  Status:  ${BLUE}sudo systemctl status klyra${NC}"
-echo "  Logs:    ${BLUE}sudo journalctl -u klyra -f${NC}"
-echo ""
+echo
+log_info "Pass: $PASS_COUNT   Warn: $WARN_COUNT   Fail: $FAIL_COUNT"
+echo
 
-log_info "Quick test (without service):"
-echo "  ${GREEN}cd $INSTALL_DIR/client && ./start_klyra.sh${NC}"
-echo ""
-
-# Check if audio is available
-if ! python3 -c "import pyaudio; p = pyaudio.PyAudio(); p.terminate()" 2>/dev/null; then
-    log_warning "TEXT INPUT MODE (No Audio Detected)"
-    echo ""
-    log_info "To start Klyra in text mode:"
-    echo "  ${GREEN}cd $INSTALL_DIR/client && python3 client_text.py${NC}"
-    echo ""
-    log_info "In text mode:"
-    echo "  • Type your messages instead of speaking"
-    echo "  • Camera still works (if available)"
-    echo "  • Responses shown as text (no voice)"
-    echo ""
+if [ "$FAIL_COUNT" -eq 0 ]; then
+    log_success "=========================================="
+    log_success "  Installation complete!"
+    log_success "=========================================="
+    echo
+    log_info "Say 'Hey Buddy' to talk to Klyra."
+    echo
+    log_info "Useful commands:"
+    log_info "  Status:   sudo systemctl status klyra"
+    log_info "  Logs:     sudo journalctl -u klyra -f"
+    log_info "  Restart:  sudo systemctl restart klyra"
+    log_info "  Update:   cd $KLYRA_INSTALL_DIR && ./client/auto_update.sh"
 else
-    log_info "Klyra Features:"
-    echo "  ✓ Auto-start on boot"
-    echo "  ✓ Auto-update every hour"
-    echo "  ✓ Auto-restart if it crashes"
-    echo "  ✓ Wake word detection ('Hey Buddy')"
-    echo "  ✓ Ding sound on wake word"
-    echo ""
-    log_success "Say 'Hey Buddy' to talk to Klyra!"
-    echo ""
+    log_error "=========================================="
+    log_error "  $FAIL_COUNT critical check(s) failed — see above"
+    log_error "=========================================="
+    exit 1
 fi
-log_info "Installation log saved to: /tmp/service-install.log"
-log_info "Completed at: $(date)"
-echo "=========================================="

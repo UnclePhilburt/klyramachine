@@ -35,12 +35,16 @@ echo "✓ Code updated successfully!"
 if git diff --name-only HEAD@{1} HEAD | grep -q "requirements.txt"; then
     echo "📦 Installing updated dependencies..."
     cd client
-    # Use virtual environment if it exists
-    if [ -f "venv/bin/activate" ]; then
-        source venv/bin/activate
-        pip install -r requirements.txt --upgrade
+    if [ ! -x "venv/bin/python" ]; then
+        echo "❌ venv missing at client/venv — re-run easy_install.sh to repair"
+        exit 1
+    fi
+    # Prefer uv if available (faster); fall back to plain pip in the venv.
+    export PATH="$HOME/.local/bin:$PATH"
+    if command -v uv &>/dev/null; then
+        uv pip install --python venv/bin/python -r requirements.txt --upgrade
     else
-        pip3 install -r requirements.txt --upgrade --break-system-packages 2>/dev/null || pip3 install -r requirements.txt --upgrade --user
+        venv/bin/pip install -r requirements.txt --upgrade
     fi
     cd ..
 fi

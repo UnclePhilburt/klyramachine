@@ -3,6 +3,7 @@ Klyra Machine - AI Companion Mode
 Monitors you and makes spontaneous comments + responds to wake word
 """
 
+import base64
 import cv2
 import pyaudio
 import wave
@@ -79,6 +80,7 @@ class CompanionClient:
         self.last_frame = None
         self.running = False
         self.is_user_speaking = False  # Track if user is currently speaking
+        self.is_speaking = False  # Track if Klyra is currently speaking (audio playback)
 
         print("Step 11: All systems ready!\n")
 
@@ -434,7 +436,6 @@ class CompanionClient:
             )
 
             if response.status_code == 200:
-                import base64
                 response_text_b64 = response.headers.get("X-Response-Text-B64", "")
                 if response_text_b64:
                     try:
@@ -455,7 +456,7 @@ class CompanionClient:
     def listen_for_wake_word(self):
         """Listen for wake word with speech detection"""
         # Don't listen while Klyra is speaking
-        if hasattr(self, 'is_speaking') and self.is_speaking:
+        if self.is_speaking:
             time.sleep(0.1)
             return False
 
@@ -561,6 +562,5 @@ class CompanionClient:
 
 
 if __name__ == "__main__":
-    import base64  # Import here for the client
     client = CompanionClient()
     client.run()
