@@ -73,14 +73,35 @@ class CompanionClient:
 
         # Companion state
         self.last_observation_time = time.time()
-        self.observation_interval_min = 30  # Minimum 30 seconds between observations
-        self.observation_interval_max = 120  # Maximum 2 minutes
-        self.next_observation = time.time() + random.randint(30, 60)
+        self.observation_interval_min = 600   # 10 minutes between observations
+        self.observation_interval_max = 900   # 15 minutes between observations
+        self.no_motion_recheck = 60           # When no motion seen, re-check this often
+        self.next_observation = time.time() + random.randint(
+            self.observation_interval_min, self.observation_interval_max
+        )
 
         self.last_frame = None
         self.running = False
         self.is_user_speaking = False  # Track if user is currently speaking
         self.is_speaking = False  # Track if Klyra is currently speaking (audio playback)
+
+        # Motion gate via MOG2 background subtraction. Cheap, runs on the Pi,
+        # no API cost. Sampled continuously from the main loop so we don't
+        # have to do warm-up bursts at trigger time.
+        self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
+            history=120, varThreshold=25, detectShadows=False
+        )
+        self.motion_check_interval = 5.0       # seconds between samples
+        self.last_motion_check = 0.0
+        self.bg_warmup_remaining = 5           # ignore the first N samples
+        self.motion_history = []               # rolling list of recent scores
+        self.motion_history_max = 12           # ~60s of history at 5s cadence
+        self.motion_threshold = 0.005          # 0.5% of frame as foreground
+
+        # Perceptual-hash dedup: don't re-comment on the same scene we just
+        # commented on. Scene "fingerprint" is an 8x8 average-hash (64 bits).
+        self.last_commented_hash = None
+        self.dedup_max_hamming = 8             # <= 8 bit differences = same scene
 
         print("Step 11: All systems ready!\n")
 
@@ -102,6 +123,59 @@ class CompanionClient:
 
         # Threshold for motion detection
         return motion_level > 5
+
+    def sample_motion(self):
+        """Tick the MOG2 background subtractor. Cheap; safe to call every
+        iteration of the main loop — gated internally by motion_check_interval.
+        Run continuously so the subtractor learns the background and the
+        motion gate has fresh state when the spontaneous timer fires."""
+        now = time.time()
+        if now - self.last_motion_check < self.motion_check_interval:
+            return
+        self.last_motion_check = now
+        if not self.camera.isOpened():
+            return
+        ret, frame = self.camera.read()
+        if not ret or frame is None:
+            return
+
+        fg_mask = self.bg_subtractor.apply(frame)
+
+        # Burn the first few samples while the model warms up — they're all
+        # ~100% "foreground" because the model has no background yet.
+        if self.bg_warmup_remaining > 0:
+            self.bg_warmup_remaining -= 1
+            return
+
+        score = float(np.count_nonzero(fg_mask > 200)) / float(fg_mask.size)
+        self.motion_history.append(score)
+        if len(self.motion_history) > self.motion_history_max:
+            self.motion_history.pop(0)
+
+    def has_recent_motion(self):
+        """True if any sample in our recent window crossed the motion
+        threshold. Uses peak (not mean) because a single still frame in the
+        middle of an active period shouldn't suppress a comment."""
+        if not self.motion_history:
+            return False
+        return max(self.motion_history) > self.motion_threshold
+
+    def _average_hash(self, frame, hash_size=8):
+        """64-bit average-hash perceptual fingerprint of a frame. Zero deps:
+        downscale to 8x8 grayscale, threshold each pixel against the mean.
+        Hamming distance between two hashes ~= scene similarity."""
+        small = cv2.resize(frame, (hash_size, hash_size),
+                           interpolation=cv2.INTER_AREA)
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        bits = (gray > gray.mean()).flatten().astype(np.uint8)
+        h = 0
+        for b in bits:
+            h = (h << 1) | int(b)
+        return h
+
+    @staticmethod
+    def _hamming(a, b):
+        return bin(a ^ b).count("1")
 
     def apply_noise_gate(self, audio_data, threshold=500):
         """Apply noise gate to remove background noise"""
@@ -166,18 +240,40 @@ class CompanionClient:
 
     def make_spontaneous_comment(self):
         """Take a photo and make a spontaneous comment"""
+        # Motion gate: don't burn API calls observing an empty room.
+        # has_recent_motion() captures its own pair of frames, so this also
+        # serves as a camera health check before we commit to an interaction.
+        if not self.has_recent_motion():
+            print(f"(no motion — rechecking in {self.no_motion_recheck}s)")
+            self.next_observation = time.time() + self.no_motion_recheck
+            return
+
         print("\n👁️  *Klyra observes you*")
 
         result = self.capture_image()
         if result is None:
             print("⚠️  Camera unavailable, skipping observation")
+            self.next_observation = time.time() + self.no_motion_recheck
             return
         image_data, frame = result
         if not image_data:
+            self.next_observation = time.time() + self.no_motion_recheck
             return
 
-        # Detect motion
-        has_motion = self.detect_motion(frame)
+        # pHash dedup: don't re-comment on a scene we already commented on.
+        # Cheap (8x8 grayscale + bit comparison), no API call, runs on Pi.
+        scene_hash = self._average_hash(frame)
+        if self.last_commented_hash is not None:
+            distance = self._hamming(scene_hash, self.last_commented_hash)
+            if distance <= self.dedup_max_hamming:
+                print(f"(scene unchanged from last comment, hamming={distance}; skipping)")
+                # Push to a half-interval — the scene may genuinely change soon.
+                half = (self.observation_interval_min + self.observation_interval_max) // 4
+                self.next_observation = time.time() + half
+                return
+
+        # Update last_frame for any other consumer of detect_motion()
+        self.detect_motion(frame)
 
         # Create context for the observation
         current_hour = datetime.now().hour
@@ -224,6 +320,10 @@ class CompanionClient:
 
                 if len(response.content) > 0:
                     self.play_audio(response.content)
+
+                # Only remember the scene we successfully commented on, so a
+                # failed network call doesn't poison the dedup state.
+                self.last_commented_hash = scene_hash
 
         except Exception as e:
             print(f"Error: {e}")
@@ -522,6 +622,10 @@ class CompanionClient:
 
         try:
             while self.running:
+                # Tick the background-subtraction motion sampler. Internally
+                # rate-limited; cheap when nothing's due.
+                self.sample_motion()
+
                 # Check if it's time for a spontaneous observation
                 if time.time() >= self.next_observation:
                     # Only make observation if user is NOT speaking
