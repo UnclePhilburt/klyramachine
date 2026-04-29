@@ -66,6 +66,20 @@ if ! command -v apt-get >/dev/null 2>&1; then
     exit 1
 fi
 
+# Detect whether the install user has a PulseAudio/PipeWire user session.
+# Yes (Ubuntu Desktop, Pi OS Desktop): audio goes through user-session socket;
+# leave /etc/asound.conf alone and pass PULSE env vars to the systemd unit.
+# No (Ubuntu Server, Pi OS Lite): bare ALSA; write /etc/asound.conf and skip
+# the user-session env vars (the socket doesn't exist).
+HAS_USER_AUDIO=0
+if dpkg -l 2>/dev/null | awk '/^ii/ {print $2}' | grep -qE '^(pulseaudio|pipewire-pulse)$'; then
+    HAS_USER_AUDIO=1
+    log_info "Audio: PulseAudio/PipeWire installed (user-session audio)"
+else
+    log_info "Audio: bare ALSA (no PulseAudio/PipeWire installed)"
+fi
+export HAS_USER_AUDIO
+
 # ----------------------------------------------------------------------------
 log_step "STEP 1: System libraries (apt)"
 log_info "Updating apt..."
@@ -82,7 +96,39 @@ sudo apt-get install -y libopenblas-dev  2>/dev/null || log_warning "libopenblas
 log_success "System libraries installed"
 
 # ----------------------------------------------------------------------------
-log_step "STEP 2: uv (Python toolchain)"
+log_step "STEP 2: Swap (low-RAM systems)"
+# Pi OS auto-configures swap via dphys-swapfile. Ubuntu Server does NOT.
+# A 1 GB Pi running Klyra + Vosk + OpenCV will OOM without swap.
+TOTAL_RAM_MB=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) / 1024 ))
+CURRENT_SWAP_MB=$(( $(awk '/^SwapTotal:/ {print $2}' /proc/meminfo) / 1024 ))
+log_info "RAM: ${TOTAL_RAM_MB} MB, Swap: ${CURRENT_SWAP_MB} MB"
+
+if [ "$TOTAL_RAM_MB" -lt 2048 ] && [ "$CURRENT_SWAP_MB" -lt 1024 ]; then
+    log_info "Low RAM, insufficient swap — adding 1 GB /swapfile"
+    if [ ! -f /swapfile ]; then
+        if sudo fallocate -l 1G /swapfile 2>/dev/null; then
+            log_info "Allocated /swapfile via fallocate"
+        else
+            log_info "fallocate unavailable, using dd..."
+            sudo dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
+        fi
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile >/dev/null
+    else
+        log_info "/swapfile already exists — re-using"
+    fi
+    sudo swapon /swapfile 2>/dev/null || log_info "/swapfile already active"
+    if ! grep -qE '^/swapfile' /etc/fstab; then
+        echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab >/dev/null
+        log_info "Added /swapfile to /etc/fstab (persists across reboot)"
+    fi
+    log_success "Swap configured"
+else
+    log_info "Sufficient RAM/swap — skipping"
+fi
+
+# ----------------------------------------------------------------------------
+log_step "STEP 3: uv (Python toolchain)"
 export PATH="$HOME/.local/bin:$PATH"
 if ! command -v uv &>/dev/null; then
     log_info "Installing uv..."
@@ -92,12 +138,12 @@ fi
 log_success "uv $(uv --version | awk '{print $2}')"
 
 # ----------------------------------------------------------------------------
-log_step "STEP 3: Python $PYTHON_VERSION"
+log_step "STEP 4: Python $PYTHON_VERSION"
 uv python install "$PYTHON_VERSION"
 log_success "Python $PYTHON_VERSION ready"
 
 # ----------------------------------------------------------------------------
-log_step "STEP 4: Klyra source"
+log_step "STEP 5: Klyra source"
 if [ "$KLYRA_SKIP_CLONE" = "1" ]; then
     log_info "KLYRA_SKIP_CLONE=1 — using existing $KLYRA_INSTALL_DIR"
     [ -d "$KLYRA_INSTALL_DIR/client" ] || { log_error "$KLYRA_INSTALL_DIR/client not found"; exit 1; }
@@ -121,7 +167,7 @@ cd "$KLYRA_INSTALL_DIR"
 log_success "Klyra at $KLYRA_INSTALL_DIR ($(git rev-parse --short HEAD 2>/dev/null || echo 'no-git'))"
 
 # ----------------------------------------------------------------------------
-log_step "STEP 5: Python environment"
+log_step "STEP 6: Python environment"
 cd "$KLYRA_INSTALL_DIR/client"
 log_info "Creating venv (Python $PYTHON_VERSION)..."
 uv venv --python "$PYTHON_VERSION" venv
@@ -134,14 +180,15 @@ uv pip install --python venv/bin/python webrtcvad || log_warning "webrtcvad inst
 log_success "Python environment ready"
 
 # ----------------------------------------------------------------------------
-log_step "STEP 6: ALSA config"
+log_step "STEP 7: ALSA config"
 # This file pins the default ALSA card to card 0, which is the right answer
-# on a Raspberry Pi with a single USB audio device but actively wrong on a
-# desktop Ubuntu/PipeWire system where the user already has working audio.
-# Only apply on real Pi hardware.
-if [ "$IS_RPI" = "1" ]; then
+# on a bare-ALSA system with a single USB audio device (Pi OS Lite, Ubuntu
+# Server) but actively wrong on a system where PulseAudio/PipeWire is in
+# charge of routing. Decision driven by HAS_USER_AUDIO (detected above),
+# not Pi-hardware presence — Ubuntu Server on a Pi has no user audio session.
+if [ "$HAS_USER_AUDIO" = "0" ]; then
     if [ ! -f /etc/asound.conf ]; then
-        log_info "Pi detected — writing /etc/asound.conf to suppress surround-sound errors..."
+        log_info "Bare ALSA — writing /etc/asound.conf (default card 0)..."
         sudo tee /etc/asound.conf >/dev/null <<'ALSAEOF'
 pcm.!default { type hw; card 0 }
 ctl.!default { type hw; card 0 }
@@ -151,11 +198,11 @@ ALSAEOF
         log_info "/etc/asound.conf already exists, leaving alone"
     fi
 else
-    log_info "Non-Pi system — leaving system audio config alone (PulseAudio/PipeWire stays in charge)"
+    log_info "PulseAudio/PipeWire in charge — leaving system audio config alone"
 fi
 
 # ----------------------------------------------------------------------------
-log_step "STEP 7: Vosk model (offline wake word)"
+log_step "STEP 8: Vosk model (offline wake word)"
 chmod +x download_vosk_model.sh
 if ./download_vosk_model.sh; then
     log_success "Vosk model installed (1st try)"
@@ -166,30 +213,39 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-log_step "STEP 8: config.json"
+log_step "STEP 9: config.json"
 if [ -f "config.json" ]; then
     log_info "config.json exists, leaving alone"
     log_info "client_id: $(python3 -c "import json;print(json.load(open('config.json'))['client_id'])" 2>/dev/null || echo '?')"
 else
     HOSTNAME_SHORT=$(hostname | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g')
+
+    # Try common stable interface names first, then any non-loopback interface.
+    # The fallback covers Ubuntu Server's predictable enxXXXXXXXXXXXX names.
     MAC_SUFFIX=""
-    for iface in wlan0 eth0 wlp0s1 enp0s3 end0; do
-        if [ -f "/sys/class/net/$iface/address" ]; then
-            MAC_SUFFIX=$(tr -d : < "/sys/class/net/$iface/address" | tail -c 7)
-            [ -n "$MAC_SUFFIX" ] && break
+    for f in /sys/class/net/eth0/address /sys/class/net/wlan0/address /sys/class/net/end0/address /sys/class/net/*/address; do
+        [ -f "$f" ] || continue
+        iface=$(basename "$(dirname "$f")")
+        [ "$iface" = "lo" ] && continue
+        candidate=$(tr -d : < "$f" | tail -c 7)
+        if [ -n "$candidate" ] && [ "$candidate" != "000000" ]; then
+            MAC_SUFFIX=$candidate
+            break
         fi
     done
-    if [ -z "$MAC_SUFFIX" ]; then
-        # Last resort: any non-loopback interface
-        for f in /sys/class/net/*/address; do
-            iface=$(basename "$(dirname "$f")")
-            [ "$iface" = "lo" ] && continue
-            MAC_SUFFIX=$(tr -d : < "$f" | tail -c 7)
-            [ -n "$MAC_SUFFIX" ] && break
-        done
-    fi
     [ -z "$MAC_SUFFIX" ] && MAC_SUFFIX=$(head -c 4 /dev/urandom | xxd -p)
-    CLIENT_ID="klyra-${HOSTNAME_SHORT}-${MAC_SUFFIX}"
+
+    # Drop the hostname segment when it's a generic default — multiple Pis
+    # would otherwise collide on "klyra-ubuntu-..." prefixes; the MAC alone
+    # is unique enough.
+    case "$HOSTNAME_SHORT" in
+        ubuntu|raspberrypi|localhost|"")
+            CLIENT_ID="klyra-${MAC_SUFFIX}"
+            ;;
+        *)
+            CLIENT_ID="klyra-${HOSTNAME_SHORT}-${MAC_SUFFIX}"
+            ;;
+    esac
     log_info "Generated client_id: $CLIENT_ID"
     cat > config.json <<EOF
 {
@@ -205,7 +261,7 @@ EOF
 fi
 
 # ----------------------------------------------------------------------------
-log_step "STEP 9: systemd service"
+log_step "STEP 10: systemd service"
 chmod +x install_service.sh start_klyra.sh auto_update.sh run_update.sh
 log_info "Running install_service.sh (lockdown=$KLYRA_LOCKDOWN)..."
 # install_service.sh has an interactive 'read -p' for lockdown — feed it our choice.
@@ -213,7 +269,7 @@ echo "$KLYRA_LOCKDOWN" | ./install_service.sh
 log_success "Service installed"
 
 # ----------------------------------------------------------------------------
-log_step "STEP 10: Start service"
+log_step "STEP 11: Start service"
 sudo systemctl start klyra
 sleep 3
 

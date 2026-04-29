@@ -50,6 +50,24 @@ python client.py
 
 See [SETUP_GUIDE.md](SETUP_GUIDE.md) for Raspberry Pi setup.
 
+### 3b. Ubuntu Server on Pi (recommended for parity with x86 dev)
+
+If you're testing on Ubuntu and deploying to a Pi, run **Ubuntu Server** on
+the Pi too — same audio stack, same package versions, fewer surprises. On
+a freshly-flashed Ubuntu Server SD card with ethernet plugged in:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/UnclePhilburt/klyramachine/main/easy_install.sh | bash
+```
+
+The installer auto-detects bare-ALSA vs PulseAudio/PipeWire and writes the
+right config. On a Pi 3B (1 GB RAM) it also adds a 1 GB swap file — Ubuntu
+Server, unlike Pi OS, doesn't auto-configure swap.
+
+Hardware: Pi 3B+/4 + USB webcam + USB mic/speaker (or USB sound card with
+3.5 mm jack). Ribbon-cable cameras are not supported by Klyra's OpenCV path
+on Ubuntu Server.
+
 ## Components
 
 ### Server (`/server`)

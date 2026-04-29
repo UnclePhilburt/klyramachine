@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install Klyra as a systemd service on Raspberry Pi
+# Install Klyra as a systemd service (Pi OS or Ubuntu, Pi or x86)
 
 # Colors for output
 RED='\033[0;31m'
@@ -42,11 +42,20 @@ log_info "Current user: $USER"
 log_info "Home directory: $HOME"
 
 # Resolve the install user's UID so the systemd service can find their
-# Pulse/PipeWire socket at /run/user/$USER_UID/pulse/native. Harmless on Pi
-# (ALSA-direct, ignores XDG_RUNTIME_DIR) but required on desktop Ubuntu
-# where audio devices live behind a user-session socket.
+# Pulse/PipeWire socket at /run/user/$USER_UID/pulse/native. Required on
+# Ubuntu Desktop / Pi OS Desktop. On Ubuntu Server / Pi OS Lite there is no
+# user audio session — pointing at a nonexistent socket just clutters the
+# journal, so we set these env vars conditionally.
 USER_UID=$(id -u "$USER")
 log_info "Install-user UID: $USER_UID"
+
+HAS_USER_AUDIO=0
+if dpkg -l 2>/dev/null | awk '/^ii/ {print $2}' | grep -qE '^(pulseaudio|pipewire-pulse)$'; then
+    HAS_USER_AUDIO=1
+    log_info "Audio: PulseAudio/PipeWire user-session detected"
+else
+    log_info "Audio: bare ALSA — skipping user-session env vars"
+fi
 
 # Verify required files exist
 log_info "Verifying required files..."
@@ -76,6 +85,12 @@ log_info "  User: $USER"
 log_info "  WorkingDirectory: $SCRIPT_DIR"
 log_info "  ExecStart: $SCRIPT_DIR/venv/bin/python $SCRIPT_DIR/client_wake_improved.py"
 
+if [ "$HAS_USER_AUDIO" = "1" ]; then
+    AUDIO_ENV=$'Environment="XDG_RUNTIME_DIR=/run/user/'$USER_UID$'"\nEnvironment="PULSE_RUNTIME_PATH=/run/user/'$USER_UID$'/pulse"'
+else
+    AUDIO_ENV='# (no user-session audio detected — using ALSA directly)'
+fi
+
 sudo tee $SERVICE_FILE > /dev/null <<EOF
 [Unit]
 Description=Klyra AI Companion
@@ -94,10 +109,7 @@ StandardError=journal
 # Environment variables
 Environment="PYTHONUNBUFFERED=1"
 Environment="DISPLAY=:0"
-# Reach the install user's Pulse/PipeWire socket from the system service.
-# Required on desktop Ubuntu; ignored by Pi ALSA-direct audio.
-Environment="XDG_RUNTIME_DIR=/run/user/$USER_UID"
-Environment="PULSE_RUNTIME_PATH=/run/user/$USER_UID/pulse"
+$AUDIO_ENV
 
 [Install]
 WantedBy=multi-user.target
@@ -139,13 +151,17 @@ else
 fi
 
 # Enable user lingering so /run/user/$USER_UID/pulse/native exists at boot,
-# before any login. Required on desktop Ubuntu so the service can reach the
-# user's audio socket; harmless on Pi (ALSA-direct doesn't use it).
-log_info "Enabling user lingering for $USER (so audio socket is reachable at boot)..."
-if sudo loginctl enable-linger "$USER" 2>&1; then
-    log_success "Lingering enabled for $USER"
+# before any login. Only relevant when there's a PulseAudio/PipeWire user
+# session — bare ALSA systems don't use it.
+if [ "$HAS_USER_AUDIO" = "1" ]; then
+    log_info "Enabling user lingering for $USER (so audio socket is reachable at boot)..."
+    if sudo loginctl enable-linger "$USER" 2>&1; then
+        log_success "Lingering enabled for $USER"
+    else
+        log_warning "loginctl enable-linger failed — audio may not work until login"
+    fi
 else
-    log_warning "loginctl enable-linger failed — fine on Pi, may break audio on Ubuntu"
+    log_info "Bare ALSA — skipping user lingering (not needed)"
 fi
 
 echo ""
