@@ -536,10 +536,16 @@ class VoskWakeWordClient:
         if not candidates:
             return None
 
-        for i, name, lname in candidates:
-            if any(p in lname for p in preferred):
-                print(f"   Auto-picked input #{i}: '{name}' (system default route)")
-                return i
+        # Iterate preferred substrings in priority order, not device order.
+        # Otherwise the first preferred-matching device by index wins, e.g.
+        # `#8 pipewire` beats `#12 Default Source` even though the latter
+        # is the more reliable route (PortAudio's pipewire host has been
+        # observed to open cleanly but never deliver frames).
+        for p in preferred:
+            for i, name, lname in candidates:
+                if p in lname:
+                    print(f"   Auto-picked input #{i}: '{name}' (system default route)")
+                    return i
 
         best_idx = None
         best_vol = -1.0
