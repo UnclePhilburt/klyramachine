@@ -216,8 +216,8 @@ log_info "Checking for Vosk model..."
 if [ -d "vosk-model-small-en-us-0.15" ]; then
     log_info "vosk-model-small-en-us-0.15 directory exists"
 
-    if [ -f "vosk-model-small-en-us-0.15/mfcc.conf" ]; then
-        log_success "Vosk model COMPLETE (mfcc.conf found)"
+    if [ -f "vosk-model-small-en-us-0.15/conf/mfcc.conf" ]; then
+        log_success "Vosk model COMPLETE (conf/mfcc.conf found)"
         log_info "Model size: $(du -sh vosk-model-small-en-us-0.15 | cut -f1)"
         log_info "Model files:"
         ls -lh vosk-model-small-en-us-0.15/ | head -10
@@ -225,7 +225,7 @@ if [ -d "vosk-model-small-en-us-0.15" ]; then
         WAKE_METHOD="vosk"
         CLIENT_SCRIPT="client_vosk.py"
     else
-        log_warning "Vosk model directory exists but mfcc.conf missing!"
+        log_warning "Vosk model directory exists but conf/mfcc.conf missing!"
         log_info "Model may be incomplete. Run: ./download_vosk_model.sh"
         WAKE_METHOD="cloud"
         CLIENT_SCRIPT="client_wake_improved.py"

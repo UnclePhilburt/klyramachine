@@ -264,7 +264,7 @@ else
     check "camera         " warn "none — Klyra will skip vision"
 fi
 
-if [ -f "vosk-model-small-en-us-0.15/mfcc.conf" ]; then
+if [ -f "vosk-model-small-en-us-0.15/conf/mfcc.conf" ]; then
     check "vosk model     " pass "complete"
 else
     check "vosk model     " warn "incomplete — wake word uses cloud Whisper"

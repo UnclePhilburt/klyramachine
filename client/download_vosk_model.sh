@@ -34,7 +34,7 @@ echo ""
 if [ -d "$MODEL_DIR/$MODEL_NAME" ]; then
     log_info "Model directory exists, checking if complete..."
 
-    if [ -f "$MODEL_DIR/$MODEL_NAME/mfcc.conf" ]; then
+    if [ -f "$MODEL_DIR/$MODEL_NAME/conf/mfcc.conf" ]; then
         log_success "Model already downloaded and complete!"
         log_info "Model size: $(du -sh $MODEL_DIR/$MODEL_NAME | cut -f1)"
         log_info "Files in model:"
@@ -140,7 +140,7 @@ fi
 if [ -d "$MODEL_DIR/$MODEL_NAME" ]; then
     log_success "Model directory created"
 
-    if [ -f "$MODEL_DIR/$MODEL_NAME/mfcc.conf" ]; then
+    if [ -f "$MODEL_DIR/$MODEL_NAME/conf/mfcc.conf" ]; then
         log_success "Model verification passed (mfcc.conf found)"
     else
         log_error "Model verification failed - mfcc.conf not found!"
