@@ -101,18 +101,18 @@ class VoskWakeWordClient:
         print("Step 7: Starting audio...")
         self.audio = pyaudio.PyAudio()
 
-        # Check for microphone
-        device_count = self.audio.get_device_count()
-        has_input = False
-        for i in range(device_count):
-            try:
-                info = self.audio.get_device_info_by_index(i)
-                if info['maxInputChannels'] > 0:
-                    has_input = True
-                    break
-            except:
-                pass
+        self.audio_format = pyaudio.paInt16
+        self.channels = 1
+        self.rate = 16000
+        self.chunk = 4096  # Larger chunk for Vosk
 
+        # Auto-pick input device: prefer PulseAudio/PipeWire "Default Source"
+        # (honors `pactl set-default-source`), then probe each hardware mic
+        # for an actual signal so we don't pick a silent onboard jack.
+        self.input_device_index = self._pick_input_device()
+
+        # Check for microphone
+        has_input = self.input_device_index is not None
         if not has_input:
             print("")
             print("WARNING: NO MICROPHONE DETECTED!")
@@ -126,11 +126,6 @@ class VoskWakeWordClient:
             subprocess.run([sys.executable, "client_text.py"])
             sys.exit(0)
 
-        self.audio_format = pyaudio.paInt16
-        self.channels = 1
-        self.rate = 16000
-        self.chunk = 4096  # Larger chunk for Vosk
-
         # TEST the microphone with actual recording
         print("Step 8: Testing microphone...")
         try:
@@ -139,6 +134,7 @@ class VoskWakeWordClient:
                 channels=self.channels,
                 rate=self.rate,
                 input=True,
+                input_device_index=self.input_device_index,
                 frames_per_buffer=self.chunk
             )
 
@@ -202,6 +198,7 @@ class VoskWakeWordClient:
                 channels=self.channels,
                 rate=self.rate,
                 input=True,
+                input_device_index=self.input_device_index,
                 frames_per_buffer=self.chunk
             )
 
@@ -350,6 +347,85 @@ class VoskWakeWordClient:
         except Exception as e:
             print(f"Error: {e}")
 
+    def _pick_input_device(self):
+        """Auto-pick the best input device.
+
+        Strategy:
+        1. Prefer PulseAudio/PipeWire 'Default Source' / 'pulse' / 'pipewire' /
+           'default' — that routes to whatever the user set with
+           `pactl set-default-source`, so the same code works on every box.
+        2. Otherwise, probe each remaining hardware input by recording briefly
+           and pick the loudest. This avoids silent onboard jacks (e.g. the
+           Intel ICH MIC ADC that exists but has nothing plugged in) when
+           there's a real USB mic also present.
+        Skip obvious non-mics: monitor (loopback of speakers), HDMI, IEC958.
+        """
+        device_count = self.audio.get_device_count()
+
+        skip_keywords = ('monitor', 'iec958', 'hdmi', 'loopback', 'output')
+        preferred = ('default source', 'pulse', 'pipewire', 'default')
+
+        candidates = []
+        for i in range(device_count):
+            try:
+                info = self.audio.get_device_info_by_index(i)
+            except Exception:
+                continue
+            if info.get('maxInputChannels', 0) <= 0:
+                continue
+            name = info.get('name', '')
+            lname = name.lower()
+            if any(k in lname for k in skip_keywords):
+                continue
+            candidates.append((i, name, lname))
+
+        if not candidates:
+            return None
+
+        for i, name, lname in candidates:
+            if any(p in lname for p in preferred):
+                print(f"   Auto-picked input #{i}: '{name}' (system default route)")
+                return i
+
+        best_idx = None
+        best_vol = -1.0
+        for i, name, _ in candidates:
+            try:
+                s = self.audio.open(
+                    format=self.audio_format,
+                    channels=self.channels,
+                    rate=self.rate,
+                    input=True,
+                    input_device_index=i,
+                    frames_per_buffer=self.chunk,
+                )
+            except Exception as e:
+                print(f"   Skipping input #{i} '{name}': can't open ({e})")
+                continue
+            try:
+                vols = []
+                for _ in range(5):
+                    data = s.read(self.chunk, exception_on_overflow=False)
+                    arr = np.frombuffer(data, dtype=np.int16)
+                    vols.append(float(np.abs(arr).mean()))
+                avg = sum(vols) / len(vols)
+                print(f"   Input #{i} '{name}': avg level {avg:.1f}")
+                if avg > best_vol:
+                    best_vol = avg
+                    best_idx = i
+            except Exception as e:
+                print(f"   Input #{i} '{name}': read failed ({e})")
+            finally:
+                try:
+                    s.stop_stream()
+                    s.close()
+                except Exception:
+                    pass
+
+        if best_idx is not None:
+            print(f"   Auto-picked input #{best_idx} (highest signal level)")
+        return best_idx
+
     def listen_for_wake_word(self):
         """Listen for wake word using Vosk (100% local)"""
         try:
@@ -358,6 +434,7 @@ class VoskWakeWordClient:
                 channels=self.channels,
                 rate=self.rate,
                 input=True,
+                input_device_index=self.input_device_index,
                 frames_per_buffer=self.chunk
             )
 
@@ -405,6 +482,7 @@ class VoskWakeWordClient:
                                 channels=self.channels,
                                 rate=self.rate,
                                 input=True,
+                                input_device_index=self.input_device_index,
                                 frames_per_buffer=self.chunk
                             )
 
