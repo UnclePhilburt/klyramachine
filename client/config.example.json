@@ -8,5 +8,7 @@
   "wake_word": "hey buddy",
   "enable_camera": true,
   "vosk_model_path": "vosk-model-small-en-us-0.15",
-  "porcupine_access_key": "YOUR_PORCUPINE_ACCESS_KEY_HERE"
+  "porcupine_access_key": "YOUR_PORCUPINE_ACCESS_KEY_HERE",
+  "stt_engine": "local",
+  "whisper_model": "tiny.en"
 }

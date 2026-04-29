@@ -48,6 +48,17 @@ print(f"[IMPORT]   Loading Vosk (offline speech recognition)...")
 from vosk import Model, KaldiRecognizer
 print(f"[IMPORT]   ✓ Vosk")
 
+# faster-whisper is optional. If config picks local STT but the package
+# is missing, we fall back to the cloud transcriber so install order
+# doesn't break existing setups.
+try:
+    from faster_whisper import WhisperModel
+    print(f"[IMPORT]   ✓ faster-whisper (local Whisper)")
+    HAVE_FASTER_WHISPER = True
+except Exception as _e:
+    HAVE_FASTER_WHISPER = False
+    print(f"[IMPORT]   ⚠  faster-whisper not installed ({_e}); cloud STT only")
+
 print("[IMPORT] All imports loaded successfully!")
 print("")
 
@@ -85,6 +96,23 @@ class VoskWakeWordClient:
         except Exception as e:
             print(f"ERROR loading Vosk model: {e}")
             sys.exit(1)
+
+        # Optional local Whisper for command transcription. Lazy: skip if
+        # disabled or package missing — transcribe_audio falls back to cloud.
+        # Using int8 quantization keeps RAM low enough for Pi 4.
+        self.whisper = None
+        stt_engine = self.config.get("stt_engine", "local")
+        whisper_size = self.config.get("whisper_model", "tiny.en")
+        if stt_engine == "local" and HAVE_FASTER_WHISPER:
+            print(f"Step 4b: Loading faster-whisper '{whisper_size}'...")
+            try:
+                self.whisper = WhisperModel(whisper_size, device="cpu", compute_type="int8")
+                print(f"Step 4c: Whisper loaded (local STT enabled)")
+            except Exception as e:
+                print(f"   ⚠  Whisper load failed: {e}; falling back to cloud STT")
+                self.whisper = None
+        elif stt_engine == "local":
+            print(f"   ⚠  stt_engine=local but faster-whisper unavailable; using cloud")
 
         # Initialize camera
         print("Step 5: Starting camera...")
@@ -257,7 +285,25 @@ class VoskWakeWordClient:
             return None
 
     def transcribe_audio(self, audio_data):
-        """Transcribe with Whisper (for commands only, not wake word)"""
+        """Transcribe a WAV blob. Local faster-whisper if loaded, else cloud."""
+        if self.whisper is not None:
+            try:
+                t0 = time.time()
+                with wave.open(io.BytesIO(audio_data), 'rb') as wf:
+                    sample_rate = wf.getframerate()
+                    pcm = wf.readframes(wf.getnframes())
+                samples = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+                if sample_rate != 16000:
+                    # faster-whisper internally resamples, but only from 16k.
+                    # We always record at 16k upstream, so this is just a guard.
+                    print(f"   ⚠  Unexpected sample rate {sample_rate}, results may degrade")
+                segments, _info = self.whisper.transcribe(samples, language="en", beam_size=1)
+                text = " ".join(seg.text for seg in segments).strip()
+                print(f"   [local whisper] {time.time()-t0:.2f}s")
+                return text or None
+            except Exception as e:
+                print(f"Local transcription error: {e}; falling back to cloud")
+
         try:
             files = {"audio": ("speech.wav", audio_data, "audio/wav")}
             response = requests.post(
