@@ -181,19 +181,33 @@ log_success "Python environment ready"
 
 # ----------------------------------------------------------------------------
 log_step "STEP 7: ALSA config"
-# This file pins the default ALSA card to card 0, which is the right answer
-# on a bare-ALSA system with a single USB audio device (Pi OS Lite, Ubuntu
-# Server) but actively wrong on a system where PulseAudio/PipeWire is in
-# charge of routing. Decision driven by HAS_USER_AUDIO (detected above),
-# not Pi-hardware presence — Ubuntu Server on a Pi has no user audio session.
+# This file pins the default ALSA card. On a bare-ALSA system (Pi OS Lite,
+# Ubuntu Server) we want the USB capture device, not card 0 — which is
+# typically HDMI when a monitor is plugged in and has no microphone.
+# Decision driven by HAS_USER_AUDIO (detected above): only touch system
+# audio config when there's no user-session router in charge.
 if [ "$HAS_USER_AUDIO" = "0" ]; then
     if [ ! -f /etc/asound.conf ]; then
-        log_info "Bare ALSA — writing /etc/asound.conf (default card 0)..."
-        sudo tee /etc/asound.conf >/dev/null <<'ALSAEOF'
-pcm.!default { type hw; card 0 }
-ctl.!default { type hw; card 0 }
+        # Find the first card with a capture (input) device. /proc/asound
+        # lists every card; cards with a /proc/asound/card<N>/pcm*c entry
+        # have at least one capture stream.
+        CAPTURE_CARD=""
+        for card_dir in /proc/asound/card*; do
+            [ -d "$card_dir" ] || continue
+            n=${card_dir#/proc/asound/card}
+            if ls "$card_dir"/pcm*c 2>/dev/null | grep -q .; then
+                CAPTURE_CARD=$n
+                break
+            fi
+        done
+        CAPTURE_CARD=${CAPTURE_CARD:-0}
+        log_info "Bare ALSA — first card with capture: $CAPTURE_CARD"
+        log_info "Writing /etc/asound.conf (default card $CAPTURE_CARD)..."
+        sudo tee /etc/asound.conf >/dev/null <<ALSAEOF
+pcm.!default { type hw; card $CAPTURE_CARD }
+ctl.!default { type hw; card $CAPTURE_CARD }
 ALSAEOF
-        log_success "/etc/asound.conf written"
+        log_success "/etc/asound.conf written (card $CAPTURE_CARD)"
     else
         log_info "/etc/asound.conf already exists, leaving alone"
     fi

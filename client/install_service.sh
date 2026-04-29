@@ -94,7 +94,12 @@ fi
 sudo tee $SERVICE_FILE > /dev/null <<EOF
 [Unit]
 Description=Klyra AI Companion
-After=network.target sound.target
+# network-online.target waits for DNS to be ready (network.target only
+# means interfaces are configured). Klyra needs to reach the Render server
+# on first request, so DNS readiness matters. sound.target doesn't exist
+# on Ubuntu Server, so it's omitted (Pi OS doesn't strictly need it either).
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=simple
@@ -105,6 +110,10 @@ Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+
+# Keep Klyra alive when the kernel runs low on memory. -100 makes the OOM
+# killer prefer almost anything else first — useful on a 1 GB Pi 3B.
+OOMScoreAdjust=-100
 
 # Environment variables
 Environment="PYTHONUNBUFFERED=1"

@@ -187,21 +187,24 @@ else:
 " 2>&1 || log_warning "Camera check failed"
 echo ""
 
-# Check server connection
+# Check server connection AND pre-warm Render (free tier sleeps after 15 min
+# of inactivity and takes ~30s to wake on first request — kicking it during
+# startup means it's awake by the time the user says the wake word).
 if [ -f "config.json" ]; then
-    log_info "Testing server connection..."
+    log_info "Pinging server (also pre-warms Render if asleep)..."
     log_info "Server: $SERVER_URL"
 
-    if curl -s --max-time 10 "$SERVER_URL/" > /dev/null 2>&1; then
-        log_success "Server is REACHABLE"
-
-        # Test API endpoints
-        log_info "Testing API health..."
-        curl -s --max-time 5 "$SERVER_URL/health" 2>&1 | head -3 || log_warning "Health endpoint unavailable"
-    else
-        log_warning "Server NOT reachable (may be sleeping on Render)"
-        log_info "Server will wake up on first request (takes ~30 seconds)"
-    fi
+    # Long timeout (45s) so a cold Render container has time to spin up.
+    # Background it so we don't block client startup — by the time Vosk
+    # finishes loading the model, the server will be ready.
+    (
+        if curl -fsSL --max-time 45 "$SERVER_URL/" > /dev/null 2>&1; then
+            echo "[prewarm] Server reachable (woken if it was asleep)"
+        else
+            echo "[prewarm] Server unreachable — first request will retry"
+        fi
+    ) &
+    log_success "Pre-warm dispatched in background"
     echo ""
 fi
 
