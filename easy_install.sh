@@ -1,6 +1,8 @@
 #!/bin/bash
 # Klyra Machine — Installer
-# One-command setup for a Raspberry Pi (or any aarch64/x86_64 Linux).
+# One-command setup for Raspberry Pi OS, Ubuntu, or any Debian-derived Linux
+# (Pi-specific tuning is applied only on real Pi hardware; on Ubuntu/desktop
+# the system audio stack is left alone).
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/UnclePhilburt/klyramachine/main/easy_install.sh | bash
@@ -44,10 +46,24 @@ if [[ ! "$OSTYPE" == "linux-gnu"* ]]; then
     log_error "This installer is for Linux only (got: $OSTYPE)"
     exit 1
 fi
-if [ -f /proc/device-tree/model ]; then
+
+# Detect whether we're on real Raspberry Pi hardware. Used later to decide
+# whether to apply Pi-specific tuning (notably the ALSA default-card config,
+# which is wrong on Ubuntu/desktop where PulseAudio/PipeWire is in charge).
+IS_RPI=0
+if [ -f /proc/device-tree/model ] \
+    && tr -d '\0' < /proc/device-tree/model | grep -qi "raspberry pi"; then
+    IS_RPI=1
     log_info "Hardware: $(tr -d '\0' < /proc/device-tree/model)"
+elif [ -f /proc/device-tree/model ]; then
+    log_info "Hardware: $(tr -d '\0' < /proc/device-tree/model) (non-Pi ARM device)"
 else
     log_info "Hardware: generic Linux ($(uname -m))"
+fi
+if ! command -v apt-get >/dev/null 2>&1; then
+    log_error "apt-get not found — this installer supports Debian/Ubuntu/Pi OS only."
+    log_error "On Fedora/Arch/etc., install deps manually and run install_service.sh by hand."
+    exit 1
 fi
 
 # ----------------------------------------------------------------------------
@@ -119,15 +135,23 @@ log_success "Python environment ready"
 
 # ----------------------------------------------------------------------------
 log_step "STEP 6: ALSA config"
-if [ ! -f /etc/asound.conf ]; then
-    log_info "Writing /etc/asound.conf (suppresses surround-sound errors)..."
-    sudo tee /etc/asound.conf >/dev/null <<'ALSAEOF'
+# This file pins the default ALSA card to card 0, which is the right answer
+# on a Raspberry Pi with a single USB audio device but actively wrong on a
+# desktop Ubuntu/PipeWire system where the user already has working audio.
+# Only apply on real Pi hardware.
+if [ "$IS_RPI" = "1" ]; then
+    if [ ! -f /etc/asound.conf ]; then
+        log_info "Pi detected — writing /etc/asound.conf to suppress surround-sound errors..."
+        sudo tee /etc/asound.conf >/dev/null <<'ALSAEOF'
 pcm.!default { type hw; card 0 }
 ctl.!default { type hw; card 0 }
 ALSAEOF
-    log_success "/etc/asound.conf written"
+        log_success "/etc/asound.conf written"
+    else
+        log_info "/etc/asound.conf already exists, leaving alone"
+    fi
 else
-    log_info "/etc/asound.conf already exists, leaving alone"
+    log_info "Non-Pi system — leaving system audio config alone (PulseAudio/PipeWire stays in charge)"
 fi
 
 # ----------------------------------------------------------------------------
