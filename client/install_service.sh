@@ -137,13 +137,14 @@ log_info "Installing Auto-Update Service..."
 log_info "=========================================="
 echo ""
 
-# Make auto-update script executable first
-log_info "Making auto_update.sh executable..."
-if chmod +x $SCRIPT_DIR/auto_update.sh 2>&1; then
-    log_success "auto_update.sh is now executable"
-    ls -lh $SCRIPT_DIR/auto_update.sh
-else
-    log_warning "Could not make auto_update.sh executable"
+# Make auto-update scripts executable first
+log_info "Making auto-update scripts executable..."
+chmod +x $SCRIPT_DIR/auto_update.sh 2>/dev/null && log_success "auto_update.sh is now executable" || log_warning "Could not chmod auto_update.sh"
+chmod +x $SCRIPT_DIR/run_update.sh  2>/dev/null && log_success "run_update.sh is now executable"  || log_warning "Could not chmod run_update.sh"
+
+if [ ! -f "$SCRIPT_DIR/run_update.sh" ]; then
+    log_error "run_update.sh missing at $SCRIPT_DIR/run_update.sh — cannot install auto-update"
+    exit 1
 fi
 
 # Try to install auto-update, but don't fail if it doesn't work
@@ -158,6 +159,8 @@ if command -v systemctl &> /dev/null; then
     fi
 
     log_info "Creating auto-update service: $UPDATE_SERVICE"
+    # Runs as root: run_update.sh drops to the unprivileged repo owner for
+    # the git pull, then restarts klyra.service if a marker was placed.
     sudo tee $UPDATE_SERVICE > /dev/null <<SERVICEEOF
 [Unit]
 Description=Klyra Auto-Update
@@ -165,9 +168,8 @@ After=network.target
 
 [Service]
 Type=oneshot
-User=$USER
 WorkingDirectory=$PARENT_DIR
-ExecStart=/bin/bash $SCRIPT_DIR/auto_update.sh
+ExecStart=/bin/bash $SCRIPT_DIR/run_update.sh
 StandardOutput=journal
 StandardError=journal
 SERVICEEOF
@@ -179,11 +181,10 @@ SERVICEEOF
         sudo cat $UPDATE_SERVICE
         echo "---"
 
-        # Show resolved paths for debugging
         log_info "Resolved paths in service:"
-        log_info "  User: $USER"
+        log_info "  User: root (run_update.sh drops privileges internally)"
         log_info "  WorkingDirectory: $PARENT_DIR"
-        log_info "  ExecStart: /bin/bash $SCRIPT_DIR/auto_update.sh"
+        log_info "  ExecStart: /bin/bash $SCRIPT_DIR/run_update.sh"
     else
         log_error "Failed to create auto-update service"
     fi
@@ -293,31 +294,38 @@ TIMEREOF
         AUTO_UPDATE_WORKING=false
     fi
 
-    # If systemd timer failed, fall back to cron (MANDATORY AUTO-UPDATE)
+    # If systemd timer failed, fall back to cron (MANDATORY AUTO-UPDATE).
+    # Installed in ROOT crontab so the cron job can restart klyra.service
+    # without sudo. run_update.sh handles dropping privileges for the pull.
     if [ "$AUTO_UPDATE_WORKING" != "true" ]; then
         echo ""
-        log_warning "Systemd timer failed - falling back to cron..."
+        log_warning "Systemd timer failed - falling back to root cron..."
         log_info "Installing cron-based auto-update (runs every hour)..."
 
-        # Create cron job
-        CRON_JOB="0 * * * * cd $PARENT_DIR && $SCRIPT_DIR/auto_update.sh >> /tmp/klyra-update.log 2>&1"
+        CRON_JOB="0 * * * * /bin/bash $SCRIPT_DIR/run_update.sh >> /var/log/klyra-update.log 2>&1"
 
-        # Add to crontab if not already there
-        (crontab -l 2>/dev/null | grep -v "klyra-update.sh" ; echo "$CRON_JOB") | crontab -
+        # Replace any prior klyra auto-update entries (legacy + current names),
+        # then append the new one. Done in root crontab.
+        if (sudo crontab -l 2>/dev/null \
+              | grep -vE 'klyra-update\.sh|auto_update\.sh|run_update\.sh' ; \
+            echo "$CRON_JOB") | sudo crontab -; then
+            # Ensure user crontabs from older installs no longer fight us.
+            (crontab -l 2>/dev/null \
+                | grep -vE 'klyra-update\.sh|auto_update\.sh|run_update\.sh') \
+                | crontab - 2>/dev/null || true
 
-        if [ $? -eq 0 ]; then
-            log_success "Cron-based auto-update installed!"
+            log_success "Cron-based auto-update installed in root crontab!"
             log_info "Updates will run every hour via cron"
             log_info "Cron job added:"
             echo "  $CRON_JOB"
-            log_info "Check logs: tail -f /tmp/klyra-update.log"
+            log_info "Check logs: sudo tail -f /var/log/klyra-update.log"
             AUTO_UPDATE_WORKING=true
         else
             log_error "Failed to install cron fallback!"
             log_error "AUTO-UPDATE IS CRITICAL - PLEASE FIX MANUALLY"
             echo ""
             log_info "Manual setup required:"
-            log_info "1. Run: crontab -e"
+            log_info "1. Run: sudo crontab -e"
             log_info "2. Add this line:"
             echo "   $CRON_JOB"
             exit 1
@@ -422,24 +430,11 @@ WantedBy=multi-user.target
 EOF
     log_success "klyra.service updated for klyra user"
 
+    # klyra-update.service intentionally stays as root — run_update.sh
+    # detects the klyra user and drops to it for the unprivileged pull,
+    # then restarts klyra.service as root. No rewrite needed here.
     if [ -f "$UPDATE_SERVICE" ]; then
-        log_info "Updating klyra-update.service to run as klyra..."
-        sudo tee "$UPDATE_SERVICE" > /dev/null <<SERVICEEOF
-[Unit]
-Description=Klyra Auto-Update
-After=network.target
-
-[Service]
-Type=oneshot
-User=klyra
-Group=klyra
-WorkingDirectory=$PARENT_DIR
-Environment="HOME=$SCRIPT_DIR"
-ExecStart=/bin/bash $SCRIPT_DIR/auto_update.sh
-StandardOutput=journal
-StandardError=journal
-SERVICEEOF
-        log_success "klyra-update.service updated for klyra user"
+        log_info "klyra-update.service stays as root (run_update.sh drops privileges to klyra)"
     fi
 
     log_info "Reloading systemd daemon..."

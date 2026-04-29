@@ -182,7 +182,7 @@ fi
 
 # ----------------------------------------------------------------------------
 log_step "STEP 9: systemd service"
-chmod +x install_service.sh start_klyra.sh auto_update.sh
+chmod +x install_service.sh start_klyra.sh auto_update.sh run_update.sh
 log_info "Running install_service.sh (lockdown=$KLYRA_LOCKDOWN)..."
 # install_service.sh has an interactive 'read -p' for lockdown — feed it our choice.
 echo "$KLYRA_LOCKDOWN" | ./install_service.sh
@@ -280,7 +280,7 @@ if [ "$FAIL_COUNT" -eq 0 ]; then
     log_info "  Status:   sudo systemctl status klyra"
     log_info "  Logs:     sudo journalctl -u klyra -f"
     log_info "  Restart:  sudo systemctl restart klyra"
-    log_info "  Update:   cd $KLYRA_INSTALL_DIR && ./client/auto_update.sh"
+    log_info "  Update:   sudo $KLYRA_INSTALL_DIR/client/run_update.sh"
 else
     log_error "=========================================="
     log_error "  $FAIL_COUNT critical check(s) failed — see above"

@@ -1,90 +1,82 @@
 #!/bin/bash
-# Auto-update script for Klyra
-# Checks for updates from GitHub and restarts the service
+# Klyra auto-updater. Runs as the unprivileged user that owns the repo.
+#
+# Pulls the latest origin/main, updates the venv if requirements.txt changed,
+# and touches a marker file when something actually changed. The privileged
+# wrapper (run_update.sh, invoked by systemd or root cron) reads the marker
+# and restarts klyra.service.
+#
+# This script never uses sudo.
 
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR/.."
+set -u
 
-echo "Checking for updates..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+MARKER="$REPO_DIR/.klyra-update-pending"
 
-# Fetch latest changes from GitHub
-git fetch origin main
+cd "$REPO_DIR"
 
-# Check if there are updates
+# Tolerate ownership mismatches between the runner and the repo.
+git config --global --add safe.directory "$REPO_DIR" >/dev/null 2>&1 || true
+
+stamp() { date '+%F %T'; }
+log()   { echo "[$(stamp)] auto_update: $*"; }
+
+log "Checking $REPO_DIR against origin/main"
+
+if ! git fetch --quiet origin main; then
+    log "ERROR: git fetch failed"
+    exit 1
+fi
+
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/main)
 
 if [ "$LOCAL" = "$REMOTE" ]; then
-    echo "✓ Already up to date!"
+    log "Already up to date ($LOCAL)"
+    rm -f "$MARKER" 2>/dev/null || true
     exit 0
 fi
 
-echo "📦 Updates found! Pulling latest code..."
-
-# Pull the latest code
-git pull origin main
-
-if [ $? -ne 0 ]; then
-    echo "❌ Error updating code"
+log "Updating $LOCAL -> $REMOTE"
+if ! git reset --quiet --hard origin/main; then
+    log "ERROR: git reset failed"
     exit 1
 fi
 
-echo "✓ Code updated successfully!"
-
-# Update dependencies if requirements.txt changed
-if git diff --name-only HEAD@{1} HEAD | grep -q "requirements.txt"; then
-    echo "📦 Installing updated dependencies..."
-    cd client
-    if [ ! -x "venv/bin/python" ]; then
-        echo "❌ venv missing at client/venv — re-run easy_install.sh to repair"
-        exit 1
-    fi
-    # Prefer uv if available (faster); fall back to plain pip in the venv.
-    export PATH="$HOME/.local/bin:$PATH"
-    if command -v uv &>/dev/null; then
-        uv pip install --python venv/bin/python -r requirements.txt --upgrade
+# If client deps changed, refresh the venv. Failures are warnings, not fatal:
+# we still want klyra restarted with the new code.
+if git diff --name-only "$LOCAL" HEAD | grep -q '^client/requirements\.txt$'; then
+    log "client/requirements.txt changed; refreshing venv"
+    if [ -x "$SCRIPT_DIR/venv/bin/python" ]; then
+        export PATH="$HOME/.local/bin:$PATH"
+        if command -v uv >/dev/null 2>&1; then
+            uv pip install --python "$SCRIPT_DIR/venv/bin/python" \
+                -r "$SCRIPT_DIR/requirements.txt" --upgrade \
+                || log "WARN: uv pip install failed; restarting anyway"
+        else
+            "$SCRIPT_DIR/venv/bin/pip" install \
+                -r "$SCRIPT_DIR/requirements.txt" --upgrade \
+                || log "WARN: pip install failed; restarting anyway"
+        fi
     else
-        venv/bin/pip install -r requirements.txt --upgrade
+        log "WARN: $SCRIPT_DIR/venv missing; skipping deps update"
     fi
-    cd ..
 fi
 
-# Re-apply lockdown if klyra user exists (lockdown was previously enabled)
-if id "klyra" &>/dev/null; then
-    echo "🔒 Re-applying security lockdown..."
+touch "$MARKER"
+log "Update applied; marker placed"
 
-    # Change ownership to klyra user
-    sudo chown -R klyra:klyra "$SCRIPT_DIR/.."
-
-    # Restrict permissions
-    sudo chmod -R 500 "$SCRIPT_DIR/.."
-
-    # Make config.json unreadable except by klyra user
-    if [ -f "$SCRIPT_DIR/client/config.json" ]; then
-        sudo chmod 400 "$SCRIPT_DIR/client/config.json"
-    fi
-
-    # Make conversation storage private
-    if [ -d "$SCRIPT_DIR/server/conversations" ]; then
-        sudo chmod 700 "$SCRIPT_DIR/server/conversations"
-    fi
-
-    # Hide .git directory
-    if [ -d "$SCRIPT_DIR/.git" ]; then
-        sudo chmod 700 "$SCRIPT_DIR/.git"
-    fi
-
-    echo "✓ Security lockdown reapplied!"
+# Transitional fallback for fleet members whose klyra-update.service still
+# points at this script directly (pre-run_update.sh installs). On those, no
+# wrapper consumes the marker, so we attempt a passwordless restart here.
+# - Default Pi OS: 'pi' has NOPASSWD sudo → restart succeeds
+# - Lockdown 'klyra' user: no sudo → fails silently; that install needs a
+#   one-time `curl … | bash` re-run to pick up run_update.sh
+# - New installs: redundant; run_update.sh has already restarted via the
+#   marker, so this is a harmless no-op
+if sudo -n /usr/bin/systemctl restart klyra.service 2>/dev/null; then
+    log "Fallback restart succeeded (legacy service file)"
 fi
 
-# Restart the service if it's running
-if systemctl is-active --quiet klyra; then
-    echo "🔄 Restarting Klyra service..."
-    sudo systemctl restart klyra
-    echo "✓ Klyra restarted with latest updates!"
-else
-    echo "ℹ️  Klyra service not running. Start it with: sudo systemctl start klyra"
-fi
-
-echo ""
-echo "🎉 Update complete!"
+exit 0

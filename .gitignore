@@ -49,3 +49,6 @@ server/conversations/
 
 # Logs
 *.log
+
+# Auto-update marker (written by auto_update.sh, consumed by run_update.sh)
+.klyra-update-pending
