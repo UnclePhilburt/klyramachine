@@ -186,7 +186,20 @@ log_step "STEP 7: ALSA config"
 # typically HDMI when a monitor is plugged in and has no microphone.
 # Decision driven by HAS_USER_AUDIO (detected above): only touch system
 # audio config when there's no user-session router in charge.
-if [ "$HAS_USER_AUDIO" = "0" ]; then
+if [ "$HAS_USER_AUDIO" = "1" ]; then
+    # If a prior bare-ALSA install left a hard-card asound.conf behind, it
+    # will silently route ALSA's `default` to a hardware card that may not
+    # be the user's real mic (e.g. a VM's onboard ICH device). Overwrite
+    # so ALSA's `default` flows through pulse like the rest of the stack.
+    if [ -f /etc/asound.conf ] && grep -qE '^\s*pcm\.!default\s*\{\s*type\s+hw' /etc/asound.conf; then
+        log_info "Replacing legacy hw-routed /etc/asound.conf with pulse routing..."
+        sudo tee /etc/asound.conf >/dev/null <<'ALSAEOF'
+pcm.!default { type pulse }
+ctl.!default { type pulse }
+ALSAEOF
+        log_success "/etc/asound.conf now routes through pulse"
+    fi
+elif [ "$HAS_USER_AUDIO" = "0" ]; then
     if [ ! -f /etc/asound.conf ]; then
         # Find the first card with a capture (input) device. /proc/asound
         # lists every card; cards with a /proc/asound/card<N>/pcm*c entry
@@ -211,8 +224,6 @@ ALSAEOF
     else
         log_info "/etc/asound.conf already exists, leaving alone"
     fi
-else
-    log_info "PulseAudio/PipeWire in charge — leaving system audio config alone"
 fi
 
 # ----------------------------------------------------------------------------
