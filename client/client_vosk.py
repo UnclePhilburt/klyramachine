@@ -504,7 +504,9 @@ class VoskWakeWordClient:
         skip_keywords = ('monitor', 'iec958', 'hdmi', 'loopback', 'output', 'sysdefault')
         preferred = ('default source', 'pulse', 'pipewire')
 
-        # Optional explicit override from config.
+        # Optional explicit override from config. Honors the same
+        # skip_keywords as auto-pick so a generic substring like
+        # "default" doesn't accidentally match "sysdefault".
         override = (self.config.get('input_device_name') or '').lower().strip()
         if override:
             for i in range(device_count):
@@ -514,7 +516,10 @@ class VoskWakeWordClient:
                     continue
                 if info.get('maxInputChannels', 0) <= 0:
                     continue
-                if override in info.get('name', '').lower():
+                lname = info.get('name', '').lower()
+                if any(k in lname for k in skip_keywords):
+                    continue
+                if override in lname:
                     print(f"   Using configured input #{i}: '{info['name']}' (input_device_name match)")
                     return i
             print(f"   ⚠  input_device_name '{override}' not found; falling back to auto-pick")
