@@ -49,15 +49,35 @@ from vosk import Model, KaldiRecognizer
 print(f"[IMPORT]   ✓ Vosk")
 
 # faster-whisper is optional. If config picks local STT but the package
-# is missing, we fall back to the cloud transcriber so install order
-# doesn't break existing setups.
+# is missing or the CPU can't run CTranslate2, we fall back to the cloud
+# transcriber.
+#
+# Force CTranslate2 to a CPU ISA the host actually supports. Some VMs
+# expose a stripped-down feature set (no AVX2/FMA), and the prebuilt
+# CTranslate2 wheel will SIGILL on import (uncatchable in Python). We
+# probe in a subprocess first so a crash there doesn't take Klyra down.
+# GENERIC is slower but works on any x86_64.
+os.environ.setdefault("CT2_FORCE_CPU_ISA", "GENERIC")
+
+HAVE_FASTER_WHISPER = False
 try:
-    from faster_whisper import WhisperModel
-    print(f"[IMPORT]   ✓ faster-whisper (local Whisper)")
-    HAVE_FASTER_WHISPER = True
+    import subprocess as _subproc
+    _probe = _subproc.run(
+        [sys.executable, "-c",
+         "import os; os.environ.setdefault('CT2_FORCE_CPU_ISA','GENERIC'); "
+         "from faster_whisper import WhisperModel"],
+        capture_output=True, timeout=30,
+    )
+    if _probe.returncode == 0:
+        from faster_whisper import WhisperModel
+        print(f"[IMPORT]   ✓ faster-whisper (local Whisper)")
+        HAVE_FASTER_WHISPER = True
+    else:
+        err = (_probe.stderr or b"").decode(errors="ignore").strip().splitlines()
+        last = err[-1] if err else f"exit {_probe.returncode}"
+        print(f"[IMPORT]   ⚠  faster-whisper unusable on this CPU ({last}); cloud STT only")
 except Exception as _e:
-    HAVE_FASTER_WHISPER = False
-    print(f"[IMPORT]   ⚠  faster-whisper not installed ({_e}); cloud STT only")
+    print(f"[IMPORT]   ⚠  faster-whisper probe failed ({_e}); cloud STT only")
 
 print("[IMPORT] All imports loaded successfully!")
 print("")
