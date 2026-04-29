@@ -483,9 +483,16 @@ class VoskWakeWordClient:
         """Auto-pick the best input device.
 
         Strategy:
+        0. If config sets `input_device_name`, pick the first input whose
+           name contains that substring (case-insensitive). Escape hatch
+           for boxes where auto-pick guesses wrong.
         1. Prefer PulseAudio/PipeWire 'Default Source' / 'pulse' / 'pipewire' /
            'default' — that routes to whatever the user set with
            `pactl set-default-source`, so the same code works on every box.
+           Order: `pulse` before `pipewire`, because PortAudio's `pipewire`
+           host on some PipeWire builds opens cleanly but never delivers
+           audio (read() blocks forever); the `pulse` shim under PipeWire
+           routes data correctly.
         2. Otherwise, probe each remaining hardware input by recording briefly
            and pick the loudest. This avoids silent onboard jacks (e.g. the
            Intel ICH MIC ADC that exists but has nothing plugged in) when
@@ -495,7 +502,22 @@ class VoskWakeWordClient:
         device_count = self.audio.get_device_count()
 
         skip_keywords = ('monitor', 'iec958', 'hdmi', 'loopback', 'output', 'sysdefault')
-        preferred = ('default source', 'pipewire', 'pulse')
+        preferred = ('default source', 'pulse', 'pipewire')
+
+        # Optional explicit override from config.
+        override = (self.config.get('input_device_name') or '').lower().strip()
+        if override:
+            for i in range(device_count):
+                try:
+                    info = self.audio.get_device_info_by_index(i)
+                except Exception:
+                    continue
+                if info.get('maxInputChannels', 0) <= 0:
+                    continue
+                if override in info.get('name', '').lower():
+                    print(f"   Using configured input #{i}: '{info['name']}' (input_device_name match)")
+                    return i
+            print(f"   ⚠  input_device_name '{override}' not found; falling back to auto-pick")
 
         candidates = []
         for i in range(device_count):
