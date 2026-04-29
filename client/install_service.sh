@@ -41,6 +41,13 @@ fi
 log_info "Current user: $USER"
 log_info "Home directory: $HOME"
 
+# Resolve the install user's UID so the systemd service can find their
+# Pulse/PipeWire socket at /run/user/$USER_UID/pulse/native. Harmless on Pi
+# (ALSA-direct, ignores XDG_RUNTIME_DIR) but required on desktop Ubuntu
+# where audio devices live behind a user-session socket.
+USER_UID=$(id -u "$USER")
+log_info "Install-user UID: $USER_UID"
+
 # Verify required files exist
 log_info "Verifying required files..."
 if [ -f "$SCRIPT_DIR/client_wake_improved.py" ]; then
@@ -87,6 +94,10 @@ StandardError=journal
 # Environment variables
 Environment="PYTHONUNBUFFERED=1"
 Environment="DISPLAY=:0"
+# Reach the install user's Pulse/PipeWire socket from the system service.
+# Required on desktop Ubuntu; ignored by Pi ALSA-direct audio.
+Environment="XDG_RUNTIME_DIR=/run/user/$USER_UID"
+Environment="PULSE_RUNTIME_PATH=/run/user/$USER_UID/pulse"
 
 [Install]
 WantedBy=multi-user.target
@@ -125,6 +136,16 @@ if sudo systemctl enable klyra.service 2>&1; then
 else
     log_error "Failed to enable klyra.service"
     exit 1
+fi
+
+# Enable user lingering so /run/user/$USER_UID/pulse/native exists at boot,
+# before any login. Required on desktop Ubuntu so the service can reach the
+# user's audio socket; harmless on Pi (ALSA-direct doesn't use it).
+log_info "Enabling user lingering for $USER (so audio socket is reachable at boot)..."
+if sudo loginctl enable-linger "$USER" 2>&1; then
+    log_success "Lingering enabled for $USER"
+else
+    log_warning "loginctl enable-linger failed — fine on Pi, may break audio on Ubuntu"
 fi
 
 echo ""
