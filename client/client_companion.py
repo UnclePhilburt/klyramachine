@@ -85,9 +85,9 @@ class CompanionClient:
         self.is_user_speaking = False  # Track if user is currently speaking
         self.is_speaking = False  # Track if Klyra is currently speaking (audio playback)
 
-        # Motion gate via MOG2 background subtraction. Cheap, runs on the Pi,
-        # no API cost. Sampled continuously from the main loop so we don't
-        # have to do warm-up bursts at trigger time.
+        # Motion gate via MOG2 background subtraction. Cheap, no API cost.
+        # Sampled continuously from the main loop so we don't have to do
+        # warm-up bursts at trigger time.
         self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
             history=120, varThreshold=25, detectShadows=False
         )
@@ -261,7 +261,7 @@ class CompanionClient:
             return
 
         # pHash dedup: don't re-comment on a scene we already commented on.
-        # Cheap (8x8 grayscale + bit comparison), no API call, runs on Pi.
+        # Cheap (8x8 grayscale + bit comparison), no API call.
         scene_hash = self._average_hash(frame)
         if self.last_commented_hash is not None:
             distance = self._hamming(scene_hash, self.last_commented_hash)

@@ -99,6 +99,34 @@ try:
 except Exception as _e:
     print(f"[IMPORT]   ⚠  piper-tts probe failed ({_e}); cloud TTS only")
 
+HAS_WEBRTCVAD = False
+try:
+    import webrtcvad
+    HAS_WEBRTCVAD = True
+    print(f"[IMPORT]   ✓ webrtcvad (voice activity detection)")
+except ImportError:
+    print(f"[IMPORT]   ⚠  webrtcvad unavailable; falling back to volume threshold")
+
+# kokoro-onnx is optional. Same probe-then-import pattern as faster-whisper
+# and piper-tts so a native-library issue can't kill Klyra at startup.
+HAS_KOKORO = False
+try:
+    import subprocess as _subproc
+    _probe = _subproc.run(
+        [sys.executable, "-c", "from kokoro_onnx import Kokoro"],
+        capture_output=True, timeout=30,
+    )
+    if _probe.returncode == 0:
+        from kokoro_onnx import Kokoro
+        print(f"[IMPORT]   ✓ kokoro-onnx (local TTS)")
+        HAS_KOKORO = True
+    else:
+        err = (_probe.stderr or b"").decode(errors="ignore").strip().splitlines()
+        last = err[-1] if err else f"exit {_probe.returncode}"
+        print(f"[IMPORT]   ⚠  kokoro-onnx unusable ({last})")
+except Exception as _e:
+    print(f"[IMPORT]   ⚠  kokoro-onnx probe failed ({_e})")
+
 print("[IMPORT] All imports loaded successfully!")
 print("")
 
@@ -139,7 +167,7 @@ class VoskWakeWordClient:
 
         # Optional local Whisper for command transcription. Lazy: skip if
         # disabled or package missing — transcribe_audio falls back to cloud.
-        # Using int8 quantization keeps RAM low enough for Pi 4.
+        # Using int8 quantization keeps RAM low enough for low-end hosts.
         self.whisper = None
         stt_engine = self.config.get("stt_engine", "local")
         whisper_size = self.config.get("whisper_model", "tiny.en")
@@ -154,13 +182,34 @@ class VoskWakeWordClient:
         elif stt_engine == "local":
             print(f"   ⚠  stt_engine=local but faster-whisper unavailable; using cloud")
 
-        # Optional local Piper TTS. Same fallback pattern as Whisper — if
-        # the package or voice file is missing, play_audio falls back to
-        # the MP3 returned by the server.
+        # Local TTS dispatch. tts_engine controls which provider:
+        #   "kokoro"          -> Kokoro (best quality, slightly slower)
+        #   "local" / "piper" -> Piper  (fastest, robotic)
+        #   "cloud"           -> ElevenLabs via server
+        # Whichever is selected loads here; if it fails, synthesize_local
+        # returns None and process_command falls through to cloud TTS.
         self.piper_voice = None
+        self.kokoro = None
+        self.kokoro_voice = self.config.get("kokoro_voice", "bm_lewis")
         tts_engine = self.config.get("tts_engine", "local")
-        voice_path = self.config.get("piper_voice", "voices/en_US-lessac-medium.onnx")
-        if tts_engine == "local" and HAVE_PIPER:
+
+        if tts_engine == "kokoro" and HAS_KOKORO:
+            kk_model = self.config.get("kokoro_model_path", "kokoro/kokoro-v1.0.onnx")
+            kk_voices = self.config.get("kokoro_voices_path", "kokoro/voices-v1.0.bin")
+            if os.path.exists(kk_model) and os.path.exists(kk_voices):
+                print(f"Step 4d: Loading Kokoro ({self.kokoro_voice})...")
+                try:
+                    self.kokoro = Kokoro(kk_model, kk_voices)
+                    print(f"Step 4e: Kokoro loaded (local TTS enabled)")
+                except Exception as e:
+                    print(f"   ⚠  Kokoro load failed: {e}; falling back to cloud TTS")
+                    self.kokoro = None
+            else:
+                print(f"   ⚠  Kokoro model files not found at {kk_model}/{kk_voices}; using cloud TTS")
+        elif tts_engine == "kokoro":
+            print(f"   ⚠  tts_engine=kokoro but kokoro-onnx unavailable; using cloud")
+        elif tts_engine in ("local", "piper") and HAVE_PIPER:
+            voice_path = self.config.get("piper_voice", "voices/en_US-lessac-medium.onnx")
             if os.path.exists(voice_path):
                 print(f"Step 4d: Loading Piper voice '{voice_path}'...")
                 try:
@@ -172,8 +221,8 @@ class VoskWakeWordClient:
             else:
                 print(f"   ⚠  Piper voice not found at {voice_path}; using cloud TTS")
                 print(f"      Run ./download_piper_voice.sh to install it")
-        elif tts_engine == "local":
-            print(f"   ⚠  tts_engine=local but piper-tts unavailable; using cloud")
+        elif tts_engine in ("local", "piper"):
+            print(f"   ⚠  tts_engine={tts_engine} but piper-tts unavailable; using cloud")
 
         # Initialize camera
         print("Step 5: Starting camera...")
@@ -194,6 +243,13 @@ class VoskWakeWordClient:
         self.channels = 1
         self.rate = 16000
         self.chunk = 4096  # Larger chunk for Vosk
+
+        # WebRTC VAD: better silence detection than raw volume threshold,
+        # especially with sensitive mics in noisy rooms. Aggressiveness 0-3;
+        # 3 is most strict. Configurable via config.json.
+        vad_agg = int(self.config.get("vad_aggressiveness", 3))
+        vad_agg = max(0, min(3, vad_agg))
+        self.vad = webrtcvad.Vad(vad_agg) if HAS_WEBRTCVAD else None
 
         # Auto-pick input device: prefer PulseAudio/PipeWire "Default Source"
         # (honors `pactl set-default-source`), then probe each hardware mic
@@ -257,7 +313,6 @@ class VoskWakeWordClient:
         # Initialize pygame for audio playback
         print("Step 9: Starting pygame mixer...")
         try:
-            # Initialize with Pi-compatible settings
             pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
             print("Step 10: Pygame mixer initialized at 44100Hz")
         except:
@@ -276,8 +331,43 @@ class VoskWakeWordClient:
         print("Step 13: Audio output test complete!")
         print("")
 
-    def record_until_silence(self, max_duration=15, silence_threshold=300, silence_duration=1.5):
-        """Record audio until silence is detected"""
+    def _chunk_has_speech(self, chunk_bytes):
+        """Split a chunk into 30ms VAD frames; speech iff a majority vote.
+        Single false-positive frames don't hold the recorder open.
+        Returns None on VAD failure so caller can fall back to volume."""
+        if not self.vad:
+            return None
+        # WebRTC VAD requires 10/20/30ms frames. 30ms at 16kHz = 480 samples = 960 bytes.
+        # 4096-sample chunk → ~8 complete frames per chunk.
+        frame_bytes = 960
+        try:
+            speech = 0
+            total = 0
+            for i in range(0, len(chunk_bytes) - frame_bytes + 1, frame_bytes):
+                total += 1
+                if self.vad.is_speech(chunk_bytes[i:i + frame_bytes], self.rate):
+                    speech += 1
+            if total == 0:
+                return None
+            # Require half the frames to vote speech. Tunable; raise to be
+            # less sensitive, lower to catch quieter speech.
+            print(f"   [vad {speech}/{total}]", end="", flush=True)
+            return speech * 2 >= total
+        except Exception:
+            return None
+
+    def record_until_silence(self, max_duration=15, silence_threshold=None,
+                             silence_duration=0.8, pre_speech_timeout=None):
+        """Record until silence is detected after the user has started speaking.
+        Tolerates up to pre_speech_timeout seconds of silence at the start
+        (lets the user take a beat to think before responding).
+
+        silence_threshold and pre_speech_timeout default to config values
+        when unset, so the settings UI can tune them without code changes."""
+        if silence_threshold is None:
+            silence_threshold = int(self.config.get("silence_threshold", 1500))
+        if pre_speech_timeout is None:
+            pre_speech_timeout = float(self.config.get("pre_speech_timeout", 4.0))
         try:
             # Small delay to let wake word finish
             time.sleep(0.3)
@@ -291,17 +381,12 @@ class VoskWakeWordClient:
                 frames_per_buffer=self.chunk
             )
 
-            # Clear any buffered audio
-            for _ in range(3):
-                try:
-                    stream.read(self.chunk, exception_on_overflow=False)
-                except:
-                    pass
-
             frames = []
             silent_chunks = 0
             speech_chunks = 0
+            pre_speech_silent_chunks = 0
             chunks_for_silence = int(self.rate / self.chunk * silence_duration)
+            pre_speech_max_chunks = int(self.rate / self.chunk * pre_speech_timeout)
             max_chunks = int(self.rate / self.chunk * max_duration)
 
             print("   🎤 Recording... (speak your command)")
@@ -310,18 +395,40 @@ class VoskWakeWordClient:
                 data = stream.read(self.chunk, exception_on_overflow=False)
                 frames.append(data)
 
-                # Check volume
+                # Volume floor: if the chunk is genuinely quiet, override
+                # whatever VAD says. WebRTC VAD on hot mics sometimes calls
+                # ambient noise speech; the volume number doesn't lie.
                 audio_data = np.frombuffer(data, dtype=np.int16)
-                volume = np.abs(audio_data).mean()
+                volume = float(np.abs(audio_data).mean())
+                print(f" vol={int(volume)}", end="", flush=True)
 
                 if volume < silence_threshold:
-                    silent_chunks += 1
-                    if silent_chunks >= chunks_for_silence:
-                        print("   ⏸️  Silence detected, processing...")
-                        break
+                    is_speech = False
                 else:
-                    silent_chunks = 0
-                    speech_chunks += 1
+                    is_speech = self._chunk_has_speech(data)
+                    if is_speech is None:
+                        is_speech = True  # VAD failed, treat loud chunk as speech
+
+                if speech_chunks == 0:
+                    # Haven't heard speech yet — wait patiently up to pre_speech_timeout.
+                    if is_speech:
+                        speech_chunks = 1
+                    else:
+                        pre_speech_silent_chunks += 1
+                        if pre_speech_silent_chunks >= pre_speech_max_chunks:
+                            print("\n   ⚠️  No speech heard, giving up\n")
+                            break
+                else:
+                    # Speech has started — now use end-of-utterance detection.
+                    if not is_speech:
+                        silent_chunks += 1
+                        if silent_chunks >= chunks_for_silence:
+                            print("\n========== SILENCE DETECTED — PROCESSING ==========\n")
+                            self.play_ding()  # audible "got it, thinking" cue
+                            break
+                    else:
+                        silent_chunks = 0
+                        speech_chunks += 1
 
             stream.stop_stream()
             stream.close()
@@ -400,6 +507,8 @@ class VoskWakeWordClient:
             with open(path, 'wb') as f:
                 f.write(audio_data)
             pygame.mixer.music.load(path)
+            volume = float(self.config.get("volume", 1.0))
+            pygame.mixer.music.set_volume(max(0.0, min(1.0, volume)))
             pygame.mixer.music.play()
             while pygame.mixer.music.get_busy():
                 time.sleep(0.1)
@@ -408,9 +517,18 @@ class VoskWakeWordClient:
             print(f"Audio playback error: {e}")
 
     def synthesize_local(self, text):
-        """Synthesize text to WAV bytes via Piper. Returns None on failure."""
-        if not self.piper_voice or not text:
+        """Dispatch to whichever local TTS engine is loaded. Returns WAV bytes
+        or None (caller falls back to cloud)."""
+        if not text:
             return None
+        if self.kokoro:
+            return self._synthesize_kokoro(text)
+        if self.piper_voice:
+            return self._synthesize_piper(text)
+        return None
+
+    def _synthesize_piper(self, text):
+        """Piper synthesis -> WAV bytes."""
         try:
             import wave, io
             t0 = time.time()
@@ -420,8 +538,217 @@ class VoskWakeWordClient:
             print(f"   [piper] {time.time()-t0:.2f}s")
             return buf.getvalue()
         except Exception as e:
-            print(f"   ⚠  Local TTS failed: {e}; falling back to cloud audio")
+            print(f"   ⚠  Piper synthesis failed: {e}; falling back to cloud audio")
             return None
+
+    def _synthesize_kokoro(self, text):
+        """Kokoro synthesis -> WAV bytes."""
+        try:
+            import wave, io
+            t0 = time.time()
+            speed = float(self.config.get("voice_speed", 1.0))
+            samples, sr = self.kokoro.create(
+                text, voice=self.kokoro_voice, speed=speed, lang="en-us"
+            )
+            pcm = (samples * 32767).clip(-32768, 32767).astype(np.int16)
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(sr)
+                wav_file.writeframes(pcm.tobytes())
+            print(f"   [kokoro {self.kokoro_voice}] {time.time()-t0:.2f}s")
+            return buf.getvalue()
+        except Exception as e:
+            print(f"   ⚠  Kokoro synthesis failed: {e}; falling back to cloud audio")
+            return None
+
+    def _history_path(self):
+        """Per-client history file. Created on first save."""
+        fname = self.config.get("history_file", "history/{client_id}.json")
+        fname = fname.format(client_id=self.client_id)
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), fname)
+
+    def _load_history(self):
+        """Load conversation history. Just user/assistant turns — system
+        prompt is prepended fresh each call so prompt edits take effect
+        without rewriting old files."""
+        path = self._history_path()
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"   ⚠  Failed to load history ({e}); starting fresh")
+            return []
+
+    def _save_history(self, history):
+        """Persist history. Caps at last 50 turns (matches server)."""
+        history = history[-50:]
+        path = self._history_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(history, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"   ⚠  Failed to save history: {e}")
+
+    @staticmethod
+    def _strip_stage_directions(text):
+        """Remove '(sighs)', '(looking around)', '*smirks*' etc. — Mistral
+        sometimes adds these despite the system prompt, and TTS reads them
+        literally. Conservative: only strip if the parenthetical is short
+        and looks like an action (lowercase, no question/punctuation inside)."""
+        import re
+        # (...) groups up to 40 chars, no internal parens, no sentence-ending
+        text = re.sub(r"\(([^()?!.]{1,40})\)", "", text)
+        # *...* asterisk-style stage directions
+        text = re.sub(r"\*([^*\n]{1,40})\*", "", text)
+        # Collapse double spaces left behind
+        return re.sub(r"\s+", " ", text).strip()
+
+    def _call_ollama(self, user_message, scene_context=None):
+        """Call local Ollama with system prompt + persisted history.
+        Returns response text, or None on failure (caller falls back)."""
+        host = self.config.get("ollama_host", "http://localhost:11434")
+        model = self.config.get("ollama_model", "mistral-small:22b")
+        system_prompt = self.config.get("system_prompt", "")
+
+        # Inject the user's name if configured. Cheap personalization that
+        # also gives Klyra a stable identity to refer to in callbacks.
+        user_name = self.config.get("user_name", "").strip()
+        if user_name:
+            system_prompt = f"{system_prompt}\n\nThe user's name is {user_name}."
+
+        # Inline scene context like the server does — keeps history clean
+        # (no system messages mid-conversation) and lets the model connect
+        # what it sees to what it's hearing.
+        user_content = user_message
+        if scene_context:
+            user_content = f"{user_message}\n[What you can see: {scene_context}]"
+
+        history = self._load_history()
+        history.append({"role": "user", "content": user_content})
+        messages = [{"role": "system", "content": system_prompt}] + history
+
+        try:
+            t0 = time.time()
+            r = requests.post(
+                f"{host}/api/chat",
+                json={"model": model, "messages": messages, "stream": False,
+                      "options": {"temperature": 0.8, "num_predict": 200}},
+                timeout=60,
+            )
+            r.raise_for_status()
+            reply = r.json()["message"]["content"].strip()
+            print(f"   [ollama {model}] {time.time()-t0:.2f}s")
+        except Exception as e:
+            print(f"   ⚠  Ollama call failed: {e}")
+            return None
+
+        reply = self._strip_stage_directions(reply)
+        history.append({"role": "assistant", "content": reply})
+        self._save_history(history)
+        return reply
+
+    def _get_scene_context(self):
+        """Capture an image and get a scene description. Dispatches to local
+        Ollama or cloud server based on config['vision_engine']:
+            "local" -> Ollama at localhost (free, fast, no privacy concerns)
+            "cloud" -> server /api/analyze-image (OpenAI Vision via Render)
+            "off"   -> skip vision entirely
+        Returns scene description text, or None on failure."""
+        if not self.camera:
+            return None
+        # Backward compat: if vision_engine isn't set, fall back to the old
+        # vision_enabled boolean (True->cloud, False->off).
+        engine = self.config.get("vision_engine")
+        if engine is None:
+            engine = "cloud" if self.config.get("vision_enabled", True) else "off"
+        if engine == "off":
+            return None
+
+        image_data = self.capture_image()
+        if not image_data:
+            return None
+
+        if engine == "local":
+            desc = self._vision_via_ollama(image_data)
+        else:
+            desc = self._vision_via_server(image_data)
+
+        if desc:
+            preview = desc if len(desc) <= 80 else desc[:77] + "..."
+            print(f"   📷 Saw: {preview}")
+        return desc
+
+    def _vision_via_ollama(self, image_data):
+        """Describe an image via local Ollama vision model.
+        Uses /api/generate (legacy multimodal path) — moondream and some
+        other vision models don't fully support the /api/chat endpoint with
+        images, so generate is more reliable across model choices."""
+        import base64
+        host = self.config.get("ollama_host", "http://localhost:11434")
+        model = self.config.get("ollama_vision_model", "moondream")
+        img_b64 = base64.b64encode(image_data).decode("utf-8")
+        prompt = (
+            "Briefly describe what you see (1-2 sentences). Focus on the "
+            "person, what they're doing, and notable objects. Only describe "
+            "what is clearly visible; don't guess details you're unsure of."
+        )
+        try:
+            t0 = time.time()
+            r = requests.post(
+                f"{host}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": prompt,
+                    "images": [img_b64],
+                    "stream": False,
+                    "options": {"num_predict": 100, "temperature": 0.3},
+                },
+                timeout=60,
+            )
+            r.raise_for_status()
+            desc = r.json().get("response", "").strip()
+            print(f"   [vision-local {model}] {time.time()-t0:.2f}s")
+            return desc or None
+        except Exception as e:
+            print(f"   ⚠  Local vision failed: {e}")
+            return None
+
+    def _vision_via_server(self, image_data):
+        """Describe an image via the server's OpenAI Vision endpoint."""
+        try:
+            t0 = time.time()
+            r = requests.post(
+                f"{self.server_url}/api/analyze-image",
+                files={"image": ("image.jpg", image_data, "image/jpeg")},
+                timeout=30,
+            )
+            if r.status_code == 200:
+                j = r.json()
+                if j.get("success"):
+                    desc = j.get("description", "").strip()
+                    print(f"   [vision-cloud] {time.time()-t0:.2f}s")
+                    return desc or None
+        except Exception as e:
+            print(f"   ⚠  Cloud vision failed: {e}")
+        return None
+
+    def _synthesize_via_server(self, text):
+        """Fallback TTS via server when Piper isn't loaded."""
+        try:
+            r = requests.post(
+                f"{self.server_url}/api/text-to-speech",
+                data={"text": text}, timeout=30,
+            )
+            if r.status_code == 200 and r.content:
+                return r.content
+        except Exception as e:
+            print(f"   ⚠  Server TTS failed: {e}")
+        return None
 
     def play_ding(self):
         """Play ding sound when wake word is detected"""
@@ -434,10 +761,37 @@ class VoskWakeWordClient:
             pass
 
     def process_command(self, text):
-        """Send command to Klyra"""
+        """Send command to Klyra via configured chat engine."""
         print(f"You: {text}")
 
-        # Only capture image if camera is enabled
+        chat_engine = self.config.get("chat_engine", "openai")
+
+        if chat_engine == "ollama":
+            # Optional vision: capture frame -> server /api/analyze-image (OpenAI
+            # Vision) -> pass description as scene_context to Ollama. Adds a
+            # cloud round-trip (~2-4s) and ~$0.01-0.03 per call. Toggle off via
+            # config "vision_enabled": false for fast/offline-only mode.
+            scene = None
+            if self.config.get("vision_enabled", True):
+                scene = self._get_scene_context()
+
+            print("💭 Thinking (local)...")
+            reply = self._call_ollama(text, scene_context=scene)
+            if not reply:
+                print("   ⚠  Ollama unavailable — no response")
+                return
+            print(f"Klyra: {reply}\n")
+
+            audio = self.synthesize_local(reply)
+            if audio:
+                self.play_audio(audio, fmt="wav")
+            else:
+                mp3 = self._synthesize_via_server(reply)
+                if mp3:
+                    self.play_audio(mp3, fmt="mp3")
+            return
+
+        # chat_engine == "openai" (existing path, unchanged)
         image_data = None
         if self.camera:
             image_data = self.capture_image()
@@ -467,10 +821,10 @@ class VoskWakeWordClient:
                     except:
                         pass
 
-                # Prefer local Piper synthesis if loaded; fall back to the
-                # MP3 the server returned. This way existing setups without
-                # Piper keep working unchanged.
-                local_wav = self.synthesize_local(response_text) if self.piper_voice else None
+                # Prefer local synthesis (Kokoro or Piper) if loaded; fall
+                # back to the MP3 the server returned. Existing setups
+                # without local TTS keep working unchanged.
+                local_wav = self.synthesize_local(response_text)
                 if local_wav:
                     self.play_audio(local_wav, fmt="wav")
                 elif len(response.content) > 0:
@@ -631,14 +985,25 @@ class VoskWakeWordClient:
                             stream.stop_stream()
                             stream.close()
 
-                            # Listen for command
+                            # Conversation mode: process the initial command,
+                            # then auto-listen for follow-ups (no wake word
+                            # needed). When conversation_mode is False,
+                            # process one turn and drop straight back to
+                            # wake-word listening.
+                            conv_mode = bool(self.config.get("conversation_mode", True))
                             audio_data = self.record_until_silence()
-                            if audio_data:
+                            while audio_data:
                                 command = self.transcribe_audio(audio_data)
-                                if command:
-                                    self.process_command(command)
-                                else:
+                                if not command:
                                     print("   ⚠️  Couldn't understand the command\n")
+                                    break
+                                self.process_command(command)
+                                if not conv_mode:
+                                    break
+                                print("\n👂 Listening for follow-up "
+                                      "(no wake word needed)...\n")
+                                self.play_ding()  # cue: "I'm listening"
+                                audio_data = self.record_until_silence()
 
                             # Restart listening
                             print("\n👂 Listening for wake word again...\n")

@@ -5,6 +5,17 @@ config.json
 # Local TTS voices (~60MB each, fetched by download_piper_voice.sh)
 client/voices/
 
+# Kokoro TTS model + voices (~340MB total) and generated voice samples
+client/kokoro/*.onnx
+client/kokoro/*.bin
+client/kokoro/*.wav
+
+# QtWebEngine persistent storage (Spotify cookies, cache, etc.)
+client/webengine_data/
+
+# Chrome --app profile (Spotify login persistence for the Music app)
+client/chrome_data/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -49,6 +60,7 @@ test_capture.jpg
 
 # Conversation storage
 server/conversations/
+client/history/
 
 # Logs
 *.log

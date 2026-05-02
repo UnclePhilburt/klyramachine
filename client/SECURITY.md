@@ -81,7 +81,7 @@ This provides good protection without breaking functionality:
 - ✅ Casual users can't browse code
 - ✅ Config file hidden
 - ✅ Auto-updates still work
-- ✅ Easy to undo: `sudo chmod -R 755 /home/pi/klyramachine`
+- ✅ Easy to undo: `sudo chmod -R 755 ~/klyramachine`
 
 ---
 
@@ -94,7 +94,7 @@ sudo nano /etc/ssh/sshd_config
 sudo systemctl restart ssh
 ```
 
-### 2. Hide Raspberry Pi on Network
+### 2. Hide host on local network
 ```bash
 # Disable mDNS/Bonjour
 sudo systemctl disable avahi-daemon
@@ -116,11 +116,9 @@ sudo systemctl disable cups
 ```
 
 ### 5. Read-Only Filesystem (Advanced)
-Make SD card read-only to prevent tampering:
-```bash
-# Follow guides for read-only Raspberry Pi OS
-# Warning: Makes system harder to update
-```
+Make the root filesystem read-only to prevent tampering. See Ubuntu's
+`overlayroot` package or systemd's `ProtectSystem=strict` directive.
+Warning: Makes the system harder to update.
 
 ---
 

@@ -1,6 +1,6 @@
 """
 Klyra Machine - Text Input Client (No Microphone Needed)
-For testing on Raspberry Pi without audio setup
+Fallback for hosts without a working audio setup.
 """
 
 import cv2

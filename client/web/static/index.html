@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>Klyra</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Top bar -->
+    <header id="topbar">
+      <button id="back-btn" class="back hidden" data-route="#/home">← Home</button>
+      <div id="topbar-title">Klyra</div>
+      <div id="clock">--:--</div>
+    </header>
+
+    <!-- Routed views -->
+    <main id="view-host"></main>
+
+    <!-- Dock (Android-style, persistent across screens) -->
+    <nav id="dock">
+      <button class="dock-tile" data-route="#/home"><span class="dock-icon">🏠</span><span class="dock-label">Home</span></button>
+      <button class="dock-tile" data-route="#/voice"><span class="dock-icon">🎙</span><span class="dock-label">Voice</span></button>
+      <button class="dock-tile" data-route="#/music"><span class="dock-icon">🎵</span><span class="dock-label">Music</span></button>
+      <button class="dock-tile" data-route="#/personality"><span class="dock-icon">🎭</span><span class="dock-label">Vibe</span></button>
+    </nav>
+
+    <!-- Toast for save/error messages -->
+    <div id="toast" class="hidden"></div>
+  </div>
+
+  <!-- Templates for each view, kept inline so we don't need a build step -->
+
+  <template id="tpl-home">
+    <section class="view view-home">
+      <h1 id="home-greeting">Hi there</h1>
+      <div class="tile-grid">
+        <button class="tile" data-route="#/voice"       data-grad="coral"><span class="tile-icon">🎙</span><span class="tile-label">Voice</span></button>
+        <button class="tile" data-action="spotify"      data-grad="green"><span class="tile-icon">🎵</span><span class="tile-label">Spotify</span></button>
+        <button class="tile" data-action="browser"      data-grad="pink"><span class="tile-icon">🌐</span><span class="tile-label">Browser</span></button>
+        <button class="tile" data-route="#/personality" data-grad="violet"><span class="tile-icon">🎭</span><span class="tile-label">Personality</span></button>
+        <button class="tile" data-route="#/privacy"     data-grad="blue"><span class="tile-icon">🔒</span><span class="tile-label">Privacy</span></button>
+        <button class="tile" data-route="#/listening"   data-grad="amber"><span class="tile-icon">👂</span><span class="tile-label">Listening</span></button>
+        <button class="tile" data-route="#/wallpaper"   data-grad="teal"><span class="tile-icon">🖼</span><span class="tile-label">Wallpaper</span></button>
+        <button class="tile" data-route="#/about"       data-grad="purple"><span class="tile-icon">ℹ</span><span class="tile-label">About</span></button>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-voice">
+    <section class="view">
+      <h1>Voice</h1>
+      <p class="subtitle">Pick how Klyra sounds.</p>
+
+      <div class="card hero">
+        <div class="hero-row">
+          <div id="hero-avatar" class="avatar avatar-lg">?</div>
+          <div class="hero-text">
+            <div id="hero-name" class="hero-name">—</div>
+            <div id="hero-cat" class="hero-cat"></div>
+          </div>
+        </div>
+        <div class="slider-row">
+          <div class="slider-head"><span>Speed</span><span id="speed-value" class="value-pill">1.00×</span></div>
+          <input type="range" id="speed-slider" min="70" max="140" value="100" />
+        </div>
+        <div class="slider-row">
+          <div class="slider-head"><span>Volume</span><span id="volume-value" class="value-pill">100%</span></div>
+          <input type="range" id="volume-slider" min="0" max="100" value="100" />
+        </div>
+        <button id="preview-btn" class="btn btn-accent">▶ Preview voice</button>
+      </div>
+
+      <div id="voice-categories"></div>
+    </section>
+  </template>
+
+  <template id="tpl-music">
+    <section class="view view-music">
+      <h1>Music</h1>
+      <p class="subtitle">Spotify opens as a Linux app. Music keeps playing when you leave this screen.</p>
+      <div class="card spotify-card">
+        <div class="spotify-emoji">🎶</div>
+        <div id="spotify-status" class="spotify-status">Tap below to open Spotify</div>
+        <div id="spotify-hint" class="spotify-hint">Audio plays through this device.</div>
+      </div>
+      <div class="action-row">
+        <button id="spotify-open-btn"  class="btn btn-spotify">▶ Open Spotify</button>
+        <button id="spotify-close-btn" class="btn btn-ghost hidden">Close Spotify</button>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-personality">
+    <section class="view">
+      <h1>Personality</h1>
+      <p class="subtitle">How Klyra acts. Pick a vibe.</p>
+      <div id="preset-grid" class="preset-grid"></div>
+      <div class="card">
+        <label class="field-label">Your name</label>
+        <input type="text" id="user-name" placeholder="What should Klyra call you?" />
+      </div>
+      <button id="save-personality" class="btn btn-accent">Save</button>
+    </section>
+  </template>
+
+  <template id="tpl-privacy">
+    <section class="view">
+      <h1>Privacy</h1>
+      <p class="subtitle">What Klyra can see and remember.</p>
+      <div class="card row-card">
+        <div class="row-icon">📷</div>
+        <div class="row-text">
+          <div class="row-title">Camera</div>
+          <div class="row-desc">Let Klyra see you. Off means no images are ever captured.</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="camera-toggle" /><span></span></label>
+      </div>
+      <div class="card row-card-stack">
+        <div class="row-head">
+          <div class="row-icon">🧠</div>
+          <div class="row-text">
+            <div class="row-title">Memory</div>
+            <div class="row-desc">Klyra remembers your past conversations across sessions.</div>
+          </div>
+        </div>
+        <button id="clear-memory" class="btn btn-danger">Clear all memory</button>
+      </div>
+      <button id="save-privacy" class="btn btn-accent">Save</button>
+    </section>
+  </template>
+
+  <template id="tpl-listening">
+    <section class="view">
+      <h1>Listening</h1>
+      <p class="subtitle">How Klyra hears you.</p>
+      <div class="card">
+        <label class="field-label">Wake word</label>
+        <input type="text" id="wake-word" placeholder="hey buddy" />
+        <div class="field-hint">What you say to wake Klyra. Common words work best.</div>
+      </div>
+      <div class="card row-card">
+        <div class="row-text full">
+          <div class="row-title">Conversation mode</div>
+          <div class="row-desc">Keep listening after Klyra responds — no need to say the wake word every time.</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="conversation-toggle" /><span></span></label>
+      </div>
+      <div class="card">
+        <div class="slider-head"><span>Sensitivity</span></div>
+        <div class="field-hint">Strict ignores noise. Sensitive picks up softer speech.</div>
+        <div class="slider-row endpoints">
+          <span class="endpoint">Strict</span>
+          <input type="range" id="sensitivity-slider" min="0" max="100" value="50" />
+          <span class="endpoint">Sensitive</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="slider-head"><span>Wait time</span><span id="wait-value" class="value-pill">4.5s</span></div>
+        <div class="field-hint">How long Klyra waits for you to start speaking after the wake word.</div>
+        <div class="slider-row endpoints">
+          <span class="endpoint">Quick</span>
+          <input type="range" id="wait-slider" min="0" max="100" value="50" />
+          <span class="endpoint">Patient</span>
+        </div>
+      </div>
+      <button id="save-listening" class="btn btn-accent">Save</button>
+    </section>
+  </template>
+
+  <template id="tpl-browser">
+    <section class="view">
+      <h1>Default browser</h1>
+      <p class="subtitle">Pick which browser the home tile opens.</p>
+      <div id="browser-grid" class="preset-grid"></div>
+    </section>
+  </template>
+
+  <template id="tpl-wallpaper">
+    <section class="view">
+      <h1>Wallpaper</h1>
+      <p class="subtitle">Pick a background for the home screen.</p>
+      <div id="wallpaper-grid" class="wallpaper-grid"></div>
+    </section>
+  </template>
+
+  <template id="tpl-about">
+    <section class="view">
+      <h1>About Klyra</h1>
+      <div class="card">
+        <p>Klyra is a sarcastic AI companion that can see and hear you.</p>
+        <ul class="tech-list">
+          <li><b>Voice:</b> Kokoro (local)</li>
+          <li><b>Brain:</b> Mistral Small 22B (local)</li>
+          <li><b>Vision:</b> Qwen2.5-VL 3B (local)</li>
+          <li><b>Wake word:</b> Vosk (local)</li>
+        </ul>
+        <p class="muted">Everything runs on this machine. No cloud.</p>
+        <div class="version">v0.1.0</div>
+      </div>
+    </section>
+  </template>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

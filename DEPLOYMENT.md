@@ -12,7 +12,7 @@ This guide walks through deploying the Klyra Machine server to Render.com.
 ## Step 1: Push to GitHub
 
 ```bash
-cd C:\Users\CodyW\Documents\klyramachine
+cd ~/klyramachine
 
 # Initialize git (if not already done)
 git init
@@ -76,7 +76,7 @@ After deployment completes (takes 2-5 minutes):
 
 ## Step 4: Update Client Config
 
-On your Windows PC or Raspberry Pi:
+On your Ubuntu host:
 
 1. Edit `client/config.json`
 2. Update `server_url` to your Render URL:
@@ -165,7 +165,5 @@ Render will automatically rebuild and deploy!
 
 ## Next Steps
 
-- Test on Windows PC first
-- Once working, deploy to Raspberry Pi
 - Monitor API usage and costs
 - Consider upgrading to paid tier for production use

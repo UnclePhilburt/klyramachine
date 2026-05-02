@@ -7,12 +7,6 @@ import requests
 import json
 import pygame
 import time
-import sys
-import io
-
-# Fix Windows console encoding
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Load config
 with open("config.json", "r") as f:

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Klyra Machine — Installer
-# One-command setup for Raspberry Pi OS, Ubuntu, or any Debian-derived Linux
-# (Pi-specific tuning is applied only on real Pi hardware; on Ubuntu/desktop
-# the system audio stack is left alone).
+# One-command setup for Ubuntu (or any Debian-derived Linux).
+# Auto-detects PulseAudio/PipeWire vs bare ALSA and configures audio
+# accordingly.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/UnclePhilburt/klyramachine/main/easy_install.sh | bash
@@ -13,6 +13,8 @@
 #   KLYRA_INSTALL_DIR — install location (default: $HOME/klyramachine)
 #   KLYRA_LOCKDOWN    — yes|no, dedicated klyra user + restricted perms (default: no)
 #   KLYRA_SKIP_CLONE  — 1 to skip git clone (use existing $KLYRA_INSTALL_DIR; for local testing)
+#   KLYRA_SKIP_BROWSERS — 1 to skip Chrome/Firefox/Brave install (default: install all three)
+#   KLYRA_SKIP_WEBUI    — 1 to skip launcher webui auto-start (systemd + XDG autostart)
 
 set -e
 set -o pipefail
@@ -47,30 +49,18 @@ if [[ ! "$OSTYPE" == "linux-gnu"* ]]; then
     exit 1
 fi
 
-# Detect whether we're on real Raspberry Pi hardware. Used later to decide
-# whether to apply Pi-specific tuning (notably the ALSA default-card config,
-# which is wrong on Ubuntu/desktop where PulseAudio/PipeWire is in charge).
-IS_RPI=0
-if [ -f /proc/device-tree/model ] \
-    && tr -d '\0' < /proc/device-tree/model | grep -qi "raspberry pi"; then
-    IS_RPI=1
-    log_info "Hardware: $(tr -d '\0' < /proc/device-tree/model)"
-elif [ -f /proc/device-tree/model ]; then
-    log_info "Hardware: $(tr -d '\0' < /proc/device-tree/model) (non-Pi ARM device)"
-else
-    log_info "Hardware: generic Linux ($(uname -m))"
-fi
+log_info "Hardware: $(uname -m)"
 if ! command -v apt-get >/dev/null 2>&1; then
-    log_error "apt-get not found — this installer supports Debian/Ubuntu/Pi OS only."
+    log_error "apt-get not found — this installer supports Debian/Ubuntu only."
     log_error "On Fedora/Arch/etc., install deps manually and run install_service.sh by hand."
     exit 1
 fi
 
 # Detect whether the install user has a PulseAudio/PipeWire user session.
-# Yes (Ubuntu Desktop, Pi OS Desktop): audio goes through user-session socket;
-# leave /etc/asound.conf alone and pass PULSE env vars to the systemd unit.
-# No (Ubuntu Server, Pi OS Lite): bare ALSA; write /etc/asound.conf and skip
-# the user-session env vars (the socket doesn't exist).
+# Yes (Ubuntu Desktop): audio goes through user-session socket; leave
+# /etc/asound.conf alone and pass PULSE env vars to the systemd unit.
+# No (Ubuntu Server): bare ALSA; write /etc/asound.conf and skip the
+# user-session env vars (the socket doesn't exist).
 HAS_USER_AUDIO=0
 if dpkg -l 2>/dev/null | awk '/^ii/ {print $2}' | grep -qE '^(pulseaudio|pipewire-pulse)$'; then
     HAS_USER_AUDIO=1
@@ -96,9 +86,63 @@ sudo apt-get install -y libopenblas-dev  2>/dev/null || log_warning "libopenblas
 log_success "System libraries installed"
 
 # ----------------------------------------------------------------------------
+log_step "STEP 1b: Browsers (Chrome, Firefox, Brave)"
+# Spotify's OAuth pops out to the system default browser, and the launcher's
+# home tile launches whichever is set as default. Each install is best-effort
+# — a flaky vendor repo or network blip won't abort the rest of the install.
+# Skip with KLYRA_SKIP_BROWSERS=1.
+if [ "${KLYRA_SKIP_BROWSERS:-0}" = "1" ]; then
+    log_info "KLYRA_SKIP_BROWSERS=1, skipping browsers"
+else
+    # Firefox — already in Ubuntu's repos.
+    if command -v firefox >/dev/null 2>&1; then
+        log_info "Firefox already installed"
+    else
+        log_info "Installing Firefox..."
+        sudo apt-get install -y firefox \
+            && log_success "Firefox installed" \
+            || log_warning "Firefox install failed (skipping)"
+    fi
+
+    # Google Chrome — needs Google's apt repo + signing key.
+    if command -v google-chrome >/dev/null 2>&1 || command -v google-chrome-stable >/dev/null 2>&1; then
+        log_info "Chrome already installed"
+    else
+        log_info "Installing Google Chrome..."
+        if curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+                | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null \
+            && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+                | sudo tee /etc/apt/sources.list.d/google-chrome.list >/dev/null \
+            && sudo apt-get update -qq \
+            && sudo apt-get install -y google-chrome-stable; then
+            log_success "Chrome installed"
+        else
+            log_warning "Chrome install failed (skipping)"
+        fi
+    fi
+
+    # Brave — needs Brave's apt repo + signing key.
+    if command -v brave-browser >/dev/null 2>&1 || command -v brave-browser-stable >/dev/null 2>&1; then
+        log_info "Brave already installed"
+    else
+        log_info "Installing Brave..."
+        if sudo curl -fsSLo /usr/share/keyrings/brave-browser-archive-keyring.gpg \
+                https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg \
+            && echo "deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg arch=amd64] https://brave-browser-apt-release.s3.brave.com/ stable main" \
+                | sudo tee /etc/apt/sources.list.d/brave-browser-release.list >/dev/null \
+            && sudo apt-get update -qq \
+            && sudo apt-get install -y brave-browser; then
+            log_success "Brave installed"
+        else
+            log_warning "Brave install failed (skipping)"
+        fi
+    fi
+fi
+
+# ----------------------------------------------------------------------------
 log_step "STEP 2: Swap (low-RAM systems)"
-# Pi OS auto-configures swap via dphys-swapfile. Ubuntu Server does NOT.
-# A 1 GB Pi running Klyra + Vosk + OpenCV will OOM without swap.
+# Ubuntu Server does not auto-configure swap. A 1 GB host running
+# Klyra + Vosk + OpenCV will OOM without it.
 TOTAL_RAM_MB=$(( $(awk '/^MemTotal:/ {print $2}' /proc/meminfo) / 1024 ))
 CURRENT_SWAP_MB=$(( $(awk '/^SwapTotal:/ {print $2}' /proc/meminfo) / 1024 ))
 log_info "RAM: ${TOTAL_RAM_MB} MB, Swap: ${CURRENT_SWAP_MB} MB"
@@ -181,11 +225,11 @@ log_success "Python environment ready"
 
 # ----------------------------------------------------------------------------
 log_step "STEP 7: ALSA config"
-# This file pins the default ALSA card. On a bare-ALSA system (Pi OS Lite,
-# Ubuntu Server) we want the USB capture device, not card 0 — which is
-# typically HDMI when a monitor is plugged in and has no microphone.
-# Decision driven by HAS_USER_AUDIO (detected above): only touch system
-# audio config when there's no user-session router in charge.
+# This file pins the default ALSA card. On a bare-ALSA system (Ubuntu
+# Server) we want the USB capture device, not card 0 — which is typically
+# HDMI when a monitor is plugged in and has no microphone. Decision driven
+# by HAS_USER_AUDIO (detected above): only touch system audio config when
+# there's no user-session router in charge.
 if [ "$HAS_USER_AUDIO" = "1" ]; then
     # If a prior bare-ALSA install left a hard-card asound.conf behind, it
     # will silently route ALSA's `default` to a hardware card that may not
@@ -247,6 +291,21 @@ else
 fi
 
 # ----------------------------------------------------------------------------
+log_step "STEP 8c: Widevine CDM (DRM for Spotify in the launcher)"
+# QtWebEngine doesn't ship with Widevine. Without it, the embedded Spotify
+# Web Player can browse but can't actually play audio ("No such device").
+# We borrow Widevine from a Google Chrome install. Best-effort: failure
+# here doesn't break the rest of the install — the launcher just won't
+# play DRM media until the user runs ./download_widevine.sh manually.
+chmod +x download_widevine.sh
+if ./download_widevine.sh; then
+    log_success "Widevine installed"
+else
+    log_warning "Widevine install failed — Spotify in the launcher won't play"
+    log_info "Run ./download_widevine.sh manually after install completes"
+fi
+
+# ----------------------------------------------------------------------------
 log_step "STEP 9: config.json"
 if [ -f "config.json" ]; then
     log_info "config.json exists, leaving alone"
@@ -269,11 +328,11 @@ else
     done
     [ -z "$MAC_SUFFIX" ] && MAC_SUFFIX=$(head -c 4 /dev/urandom | xxd -p)
 
-    # Drop the hostname segment when it's a generic default — multiple Pis
-    # would otherwise collide on "klyra-ubuntu-..." prefixes; the MAC alone
-    # is unique enough.
+    # Drop the hostname segment when it's a generic default — multiple
+    # hosts would otherwise collide on "klyra-ubuntu-..." prefixes; the
+    # MAC alone is unique enough.
     case "$HOSTNAME_SHORT" in
-        ubuntu|raspberrypi|localhost|"")
+        ubuntu|localhost|"")
             CLIENT_ID="klyra-${MAC_SUFFIX}"
             ;;
         *)
@@ -310,6 +369,69 @@ log_success "Service installed"
 log_step "STEP 11: Start service"
 sudo systemctl start klyra
 sleep 3
+
+# ----------------------------------------------------------------------------
+log_step "STEP 12: Launcher webui (auto-start)"
+# Two pieces: a system-level service that runs the FastAPI launcher backend
+# (always on, regardless of login), and an XDG autostart .desktop that pops
+# the Chrome window after login. Skip with KLYRA_SKIP_WEBUI=1 (e.g. headless
+# servers).
+if [ "${KLYRA_SKIP_WEBUI:-0}" = "1" ]; then
+    log_info "KLYRA_SKIP_WEBUI=1, skipping launcher auto-start"
+else
+    CLIENT_DIR="$KLYRA_INSTALL_DIR/client"
+    WEBUI_SERVICE="/etc/systemd/system/klyra-webui.service"
+    chmod +x "$CLIENT_DIR/web/window.sh" 2>/dev/null || true
+
+    log_info "Creating $WEBUI_SERVICE..."
+    sudo tee "$WEBUI_SERVICE" > /dev/null <<EOF
+[Unit]
+Description=Klyra Launcher Webui (FastAPI backend on localhost:8080)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$CLIENT_DIR
+ExecStart=$CLIENT_DIR/venv/bin/python $CLIENT_DIR/web/server.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl daemon-reload
+    if sudo systemctl enable klyra-webui.service >/dev/null 2>&1; then
+        log_success "klyra-webui.service enabled"
+    else
+        log_warning "Failed to enable klyra-webui.service"
+    fi
+    if sudo systemctl restart klyra-webui.service; then
+        log_success "klyra-webui.service started on http://localhost:8080"
+    else
+        log_warning "Failed to start klyra-webui.service (check: sudo journalctl -u klyra-webui -n 30)"
+    fi
+
+    # XDG autostart entry — only fires in graphical sessions (no-op on headless).
+    AUTOSTART_DIR="$HOME/.config/autostart"
+    mkdir -p "$AUTOSTART_DIR"
+    cat > "$AUTOSTART_DIR/klyra-launcher.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Klyra Launcher
+Comment=Klyra home screen
+Exec=/bin/bash $CLIENT_DIR/web/window.sh
+X-GNOME-Autostart-enabled=true
+Terminal=false
+NoDisplay=false
+EOF
+    log_success "Autostart entry: $AUTOSTART_DIR/klyra-launcher.desktop"
+fi
 
 # ----------------------------------------------------------------------------
 log_step "PRE-FLIGHT CHECKS"

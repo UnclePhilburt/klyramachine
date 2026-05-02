@@ -3,13 +3,13 @@
 An interactive AI companion with client-server architecture. Like Alexa, but it can see you and hold natural conversations!
 
 - **Server**: Deployed on Render, handles all AI processing (Vision, GPT, TTS)
-- **Client**: Lightweight Raspberry Pi with camera/mic/speaker
+- **Client**: Runs on Ubuntu with camera/mic/speaker
 
 ## Architecture
 
 ```
 ┌─────────────────────┐         ┌──────────────────────┐
-│   Raspberry Pi      │         │   Render Server      │
+│   Ubuntu host       │         │   Render Server      │
 │   (Client)          │◄───────►│   (AI Processing)    │
 ├─────────────────────┤         ├──────────────────────┤
 │ • Camera capture    │         │ • OpenAI Vision API  │
@@ -36,37 +36,21 @@ An interactive AI companion with client-server architecture. Like Alexa, but it 
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 
-### 2. Test on Windows (Before Raspberry Pi)
+### 2. Install the client on Ubuntu
 
-```bash
-cd client
-pip install -r requirements.txt
-copy config.example.json config.json
-# Server URL is already set to https://klyramachine.onrender.com
-python client.py
-```
-
-### 3. Deploy to Raspberry Pi
-
-See [SETUP_GUIDE.md](SETUP_GUIDE.md) for Raspberry Pi setup.
-
-### 3b. Ubuntu Server on Pi (recommended for parity with x86 dev)
-
-If you're testing on Ubuntu and deploying to a Pi, run **Ubuntu Server** on
-the Pi too — same audio stack, same package versions, fewer surprises. On
-a freshly-flashed Ubuntu Server SD card with ethernet plugged in:
+On a fresh Ubuntu install (Desktop or Server, x86 or ARM) with networking up:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/UnclePhilburt/klyramachine/main/easy_install.sh | bash
 ```
 
 The installer auto-detects bare-ALSA vs PulseAudio/PipeWire and writes the
-right config. On a Pi 3B (1 GB RAM) it also adds a 1 GB swap file — Ubuntu
-Server, unlike Pi OS, doesn't auto-configure swap.
+right config. On low-RAM machines (<2 GB) it also adds a 1 GB swap file
+since Klyra + Vosk + OpenCV will OOM otherwise.
 
-Hardware: Pi 3B+/4 + USB webcam + USB mic/speaker (or USB sound card with
-3.5 mm jack). Ribbon-cable cameras are not supported by Klyra's OpenCV path
-on Ubuntu Server.
+Hardware: USB webcam + USB mic/speaker (or USB sound card with 3.5 mm jack).
+
+See [SETUP_GUIDE.md](SETUP_GUIDE.md) for manual setup.
 
 ## Components
 
@@ -77,7 +61,7 @@ on Ubuntu Server.
 - Can handle multiple clients simultaneously
 
 ### Client (`/client`)
-- Runs on Raspberry Pi (or Windows for testing)
+- Runs on Ubuntu
 - Captures camera and microphone input
 - Sends data to server via HTTP
 - Plays audio responses
@@ -86,7 +70,6 @@ on Ubuntu Server.
 - Real-time camera vision analysis
 - Contextual conversation with memory
 - Natural speech responses
-- Lightweight client for Raspberry Pi
 - Cloud-based AI processing
 - Works from anywhere with internet
 

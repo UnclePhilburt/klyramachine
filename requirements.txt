@@ -15,6 +15,3 @@ SpeechRecognition>=3.10.0
 
 # ElevenLabs for text-to-speech
 elevenlabs>=0.2.0
-
-# Raspberry Pi specific (uncomment if on Raspberry Pi)
-# picamera2>=0.3.0

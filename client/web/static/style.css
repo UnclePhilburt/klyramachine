@@ -1,0 +1,526 @@
+:root {
+  --accent: #FF6B47;
+  --accent-dark: #E5532D;
+  --bg: #FAF9F7;
+  --surface: #FFFFFF;
+  --border: #EAE7E2;
+  --text: #1A1F2E;
+  --muted: #6B7280;
+  --subtle: #F3F1ED;
+  --danger: #DC2626;
+  --green: #1DB954;
+  --green-dark: #1AA34A;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body, #app { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: linear-gradient(135deg, #FF6B47 0%, #FF8E5C 40%, #B45BA8 100%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+#app { display: flex; flex-direction: column; }
+
+/* ----- Top bar ----- */
+#topbar {
+  height: 56px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 20px;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+/* Status-bar look on home: transparent over the wallpaper */
+body[data-route="home"] #topbar {
+  background: transparent;
+  border-bottom: none;
+  color: white;
+}
+body[data-route="home"] #topbar-title { display: none; }
+body[data-route="home"] #clock { color: white; text-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+.back {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  justify-self: start;
+}
+.back:hover { background: var(--subtle); }
+.back.hidden { visibility: hidden; }
+#topbar-title { font-weight: 600; font-size: 13px; }
+#clock { justify-self: end; font-weight: 500; font-size: 13px; }
+
+/* ----- View host ----- */
+#view-host {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: transparent;
+}
+.view {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 32px 64px;
+}
+/* Inner pages get a solid surface so the wallpaper doesn't bleed through */
+.view:not(.view-home) {
+  background: var(--bg);
+  min-height: 100%;
+}
+.view h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.subtitle {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+/* ----- Cards ----- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 24px rgba(0, 0, 0, 0.04);
+  margin-bottom: 16px;
+}
+.card.hero { padding: 24px; }
+.hero-row { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.hero-text { flex: 1; }
+.hero-name { font-size: 22px; font-weight: 600; }
+.hero-cat { font-size: 12px; color: var(--muted); }
+.avatar {
+  background: var(--accent);
+  color: white;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+}
+.avatar-lg { width: 72px; height: 72px; font-size: 28px; }
+.avatar-sm { width: 56px; height: 56px; font-size: 22px; }
+.avatar-tile {
+  width: 64px; height: 64px;
+  border-radius: 16px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ----- Home tile grid ----- */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 140px);
+  gap: 24px 28px;
+  justify-content: start;
+  margin-top: 16px;
+}
+.tile {
+  width: 140px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 0;
+}
+.tile-icon {
+  width: 120px; height: 120px;
+  border-radius: 28px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 48px;
+  color: white;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  transition: transform 0.1s ease;
+}
+.tile:active .tile-icon { transform: scale(0.96); }
+.tile-label { font-size: 13px; font-weight: 500; color: var(--text); }
+
+.tile[data-grad="coral"]  .tile-icon { background: linear-gradient(180deg, #FF6B47, #FF9472); }
+.tile[data-grad="green"]  .tile-icon { background: linear-gradient(180deg, #1DB954, #1ED760); }
+.tile[data-grad="violet"] .tile-icon { background: linear-gradient(180deg, #7C3AED, #A78BFA); }
+.tile[data-grad="blue"]   .tile-icon { background: linear-gradient(180deg, #3B82F6, #60A5FA); }
+.tile[data-grad="amber"]  .tile-icon { background: linear-gradient(180deg, #F59E0B, #FBBF24); }
+.tile[data-grad="purple"] .tile-icon { background: linear-gradient(180deg, #8B5CF6, #A78BFA); }
+.tile[data-grad="pink"]   .tile-icon { background: linear-gradient(180deg, #EC4899, #F472B6); }
+.tile[data-grad="teal"]   .tile-icon { background: linear-gradient(180deg, #14B8A6, #2DD4BF); }
+
+/* ----- Voice grid ----- */
+.cat-label {
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  margin: 24px 0 12px;
+}
+.voice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 120px);
+  gap: 12px;
+}
+.voice-card {
+  width: 120px; height: 140px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.voice-card:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+.voice-card.selected {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+.voice-card .avatar-tile { background: var(--subtle); }
+.voice-card[data-cat="American Female"] .avatar-tile { background: #FFE4E6; }
+.voice-card[data-cat="American Male"]   .avatar-tile { background: #DBEAFE; }
+.voice-card[data-cat="British Female"]  .avatar-tile { background: #F3E8FF; }
+.voice-card[data-cat="British Male"]    .avatar-tile { background: #FEF3C7; }
+.voice-card.selected .avatar-tile {
+  background: var(--accent);
+  color: white;
+}
+.voice-name { font-size: 13px; font-weight: 500; }
+
+/* ----- Sliders ----- */
+.slider-row { margin-top: 16px; }
+.slider-row.endpoints {
+  display: flex; align-items: center; gap: 12px;
+}
+.slider-row.endpoints .endpoint {
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 60px;
+  text-align: center;
+}
+.slider-head {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; font-weight: 600;
+  margin-bottom: 4px;
+}
+.value-pill { color: var(--accent); font-size: 13px; font-weight: 600; }
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px; height: 22px;
+  background: white;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 22px; height: 22px;
+  background: white;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* ----- Buttons ----- */
+.btn {
+  border: none;
+  border-radius: 24px;
+  padding: 14px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  min-height: 48px;
+}
+.btn-accent { background: var(--accent); color: white; }
+.btn-accent:hover { background: var(--accent-dark); }
+.btn-spotify { background: var(--green); color: white; }
+.btn-spotify:hover { background: var(--green-dark); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { background: var(--subtle); }
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid #FCA5A5;
+}
+.btn-danger:hover {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+.action-row { display: flex; gap: 12px; margin-top: 16px; }
+
+/* ----- Inputs ----- */
+.field-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.field-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+input[type="text"] {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: inherit;
+  min-height: 48px;
+}
+input[type="text"]:focus { outline: none; border-color: var(--accent); }
+
+/* ----- Switch (iOS toggle) ----- */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 56px; height: 32px;
+  flex-shrink: 0;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch span {
+  position: absolute; inset: 0;
+  background: #D1D5DB;
+  border-radius: 16px;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+.switch span::after {
+  content: "";
+  position: absolute;
+  top: 4px; left: 4px;
+  width: 24px; height: 24px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s;
+}
+.switch input:checked + span { background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(24px); }
+
+/* ----- Privacy / row cards ----- */
+.row-card { display: flex; align-items: center; gap: 16px; }
+.row-card-stack { display: flex; flex-direction: column; gap: 16px; }
+.row-card-stack .row-head { display: flex; align-items: center; gap: 16px; }
+.row-icon {
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+}
+.row-text { flex: 1; }
+.row-text.full { flex: 1; }
+.row-title { font-size: 15px; font-weight: 600; }
+.row-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* ----- Personality grid ----- */
+.preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.preset-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 100px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+.preset-card.selected {
+  background: #FFF6F2;
+  border-color: var(--accent);
+  border-width: 2px;
+}
+.preset-emoji { font-size: 32px; min-width: 40px; text-align: center; }
+.preset-text { flex: 1; }
+.preset-name { font-size: 16px; font-weight: 600; }
+.preset-tag  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* ----- Music card ----- */
+.spotify-card {
+  background: linear-gradient(180deg, #1DB954, #1ED760);
+  border: none;
+  color: white;
+  text-align: center;
+  padding: 48px 32px;
+}
+.spotify-emoji { font-size: 64px; margin-bottom: 8px; }
+.spotify-status { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.spotify-hint { font-size: 12px; opacity: 0.9; }
+
+/* ----- About ----- */
+.tech-list {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+}
+.tech-list li { padding: 4px 0; font-size: 14px; }
+.tech-list li b { font-weight: 600; }
+.muted { color: var(--muted); font-size: 13px; margin-top: 8px; }
+.version { color: var(--muted); font-size: 11px; margin-top: 16px; }
+
+/* ----- Toast ----- */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 100;
+}
+#toast.hidden { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(20px); }
+.hidden { display: none; }
+
+/* ===== Android-style launcher home ===== */
+.view-home {
+  background: transparent;
+  padding: 16px 20px 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.view-home h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  margin: 8px 4px 24px;
+}
+.view-home .tile-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px 8px;
+  justify-content: stretch;
+  margin-top: 8px;
+}
+.view-home .tile {
+  width: auto;
+  gap: 6px;
+}
+.view-home .tile-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  font-size: 28px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  margin: 0 auto;
+}
+.view-home .tile-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* ===== Dock (floating, Android-ish) ===== */
+#dock {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 16px 16px;
+  padding: 8px 6px;
+  background: rgba(255,255,255,0.78);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-radius: 28px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+  flex-shrink: 0;
+}
+.dock-tile {
+  flex: 1;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 20px;
+  font-family: inherit;
+  color: var(--text);
+  transition: background 0.15s, color 0.15s;
+}
+.dock-tile:hover { background: rgba(0,0,0,0.04); }
+.dock-tile.active { color: var(--accent); }
+.dock-tile.active .dock-icon { transform: scale(1.05); }
+.dock-icon { font-size: 22px; line-height: 1; transition: transform 0.15s; }
+.dock-label { font-size: 10px; font-weight: 600; letter-spacing: 0.2px; }
+
+/* ===== Wallpaper picker ===== */
+.wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-top: 8px;
+}
+.wallpaper-card {
+  position: relative;
+  aspect-ratio: 9 / 14;
+  border-radius: 18px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+}
+.wallpaper-card:active { transform: scale(0.98); }
+.wallpaper-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+}
+.wallpaper-card .wp-name {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.35));
+}
+.wallpaper-card .wp-check {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+}
+.wallpaper-card.selected .wp-check { display: flex; }

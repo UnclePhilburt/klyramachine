@@ -14,9 +14,6 @@ scipy>=1.11.0
 numpy>=1.24.0
 # webrtcvad>=2.0.10  # Optional - commented out because it requires C++ compilation
 
-# Raspberry Pi camera (uncomment if using Pi camera module)
-# picamera2>=0.3.0
-
 # Wake word detection
 pvporcupine>=3.0.0
 vosk>=0.3.45

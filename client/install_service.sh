@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install Klyra as a systemd service (Pi OS or Ubuntu, Pi or x86)
+# Install Klyra as a systemd service on Ubuntu (Desktop or Server, x86 or ARM)
 
 # Colors for output
 RED='\033[0;31m'
@@ -43,9 +43,9 @@ log_info "Home directory: $HOME"
 
 # Resolve the install user's UID so the systemd service can find their
 # Pulse/PipeWire socket at /run/user/$USER_UID/pulse/native. Required on
-# Ubuntu Desktop / Pi OS Desktop. On Ubuntu Server / Pi OS Lite there is no
-# user audio session — pointing at a nonexistent socket just clutters the
-# journal, so we set these env vars conditionally.
+# Ubuntu Desktop. On Ubuntu Server there is no user audio session —
+# pointing at a nonexistent socket just clutters the journal, so we set
+# these env vars conditionally.
 USER_UID=$(id -u "$USER")
 log_info "Install-user UID: $USER_UID"
 
@@ -97,7 +97,7 @@ Description=Klyra AI Companion
 # network-online.target waits for DNS to be ready (network.target only
 # means interfaces are configured). Klyra needs to reach the Render server
 # on first request, so DNS readiness matters. sound.target doesn't exist
-# on Ubuntu Server, so it's omitted (Pi OS doesn't strictly need it either).
+# on Ubuntu Server, so it's omitted.
 Wants=network-online.target
 After=network-online.target
 
@@ -112,7 +112,7 @@ StandardOutput=journal
 StandardError=journal
 
 # Keep Klyra alive when the kernel runs low on memory. -100 makes the OOM
-# killer prefer almost anything else first — useful on a 1 GB Pi 3B.
+# killer prefer almost anything else first — useful on low-RAM hosts.
 OOMScoreAdjust=-100
 
 # Environment variables

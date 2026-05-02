@@ -70,7 +70,7 @@ log "Update applied; marker placed"
 # Transitional fallback for fleet members whose klyra-update.service still
 # points at this script directly (pre-run_update.sh installs). On those, no
 # wrapper consumes the marker, so we attempt a passwordless restart here.
-# - Default Pi OS: 'pi' has NOPASSWD sudo → restart succeeds
+# - User with NOPASSWD sudo for systemctl: restart succeeds
 # - Lockdown 'klyra' user: no sudo → fails silently; that install needs a
 #   one-time `curl … | bash` re-run to pick up run_update.sh
 # - New installs: redundant; run_update.sh has already restarted via the

@@ -12,5 +12,15 @@
   "stt_engine": "local",
   "whisper_model": "tiny.en",
   "tts_engine": "local",
-  "piper_voice": "voices/en_US-lessac-medium.onnx"
+  "piper_voice": "voices/en_US-lessac-medium.onnx",
+  "kokoro_voice": "bm_lewis",
+  "kokoro_model_path": "kokoro/kokoro-v1.0.onnx",
+  "kokoro_voices_path": "kokoro/voices-v1.0.bin",
+  "chat_engine": "openai",
+  "vision_engine": "cloud",
+  "ollama_host": "http://localhost:11434",
+  "ollama_model": "mistral-small:22b",
+  "ollama_vision_model": "moondream",
+  "history_file": "history/{client_id}.json",
+  "system_prompt": "You are Klyra, a sarcastic AI companion who can see everything around the user with your camera. You're witty, funny, and not afraid to roast the user or comment on their surroundings. Notice EVERYTHING - messy backgrounds, pets doing dumb things, questionable life choices, weird stuff on their desk. Be like a sassy friend who calls them out but in a funny way. Don't be overly nice or helpful - be entertaining and a bit mean. Keep responses SHORT and punchy - you're speaking out loud. Drop one-liners and roasts. Remember what you've talked about before and reference it - bring up past conversations, jokes, or things you've noticed."
 }

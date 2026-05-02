@@ -3,10 +3,10 @@
 ## Overview
 
 The Klyra Machine has two parts:
-1. **Server** - Runs on your powerful computer (handles AI)
-2. **Client** - Runs on Raspberry Pi (captures camera/mic, plays audio)
+1. **Server** - Runs on Render (handles AI)
+2. **Client** - Runs on Ubuntu (captures camera/mic, plays audio)
 
-## Part 1: Server Setup (Your Render Server)
+## Part 1: Server Setup (Render)
 
 ### 1. Get API Keys
 
@@ -14,41 +14,24 @@ You'll need:
 - **OpenAI API Key**: https://platform.openai.com/api-keys
 - **ElevenLabs API Key**: https://elevenlabs.io/app/settings/api-keys
 
-### 2. Install Python
+### 2. Deploy
 
-Make sure you have Python 3.8 or newer installed.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Render walkthrough. The
+short version:
 
-### 3. Set Up Server
+1. Fork this repo on GitHub.
+2. Create a new Web Service on Render and connect the fork.
+3. Set environment variables `OPENAI_API_KEY` and `ELEVENLABS_API_KEY`.
+4. Render builds with `cd server && pip install -r requirements.txt` and
+   starts with `cd server && python server.py`.
+
+### 3. Run the server locally (optional, for development)
 
 ```bash
-cd C:\Users\CodyW\Documents\klyramachine\server
-
-# Install dependencies
+cd server
 pip install -r requirements.txt
-
-# Create config file
-copy config.example.json config.json
-```
-
-### 4. Edit config.json
-
-Open `config.json` and add your API keys:
-
-```json
-{
-  "openai_api_key": "sk-your-actual-key-here",
-  "elevenlabs_api_key": "your-elevenlabs-key-here",
-  "server_host": "0.0.0.0",
-  "server_port": 8000,
-  "elevenlabs_voice": "Adam",
-  "gpt_model": "gpt-4o",
-  "system_prompt": "You are Klyra..."
-}
-```
-
-### 5. Run Server
-
-```bash
+cp config.example.json config.json
+# Edit config.json with your API keys
 python server.py
 ```
 
@@ -58,102 +41,84 @@ Starting Klyra Machine Server...
 Server will run on 0.0.0.0:8000
 ```
 
-The server is now running! Keep this terminal open.
+## Part 2: Ubuntu Client Setup
 
-### 6. Find Your Server IP Address
+### 1. Hardware
 
-On Windows, open Command Prompt and type:
+- Ubuntu host (Desktop or Server, x86 or ARM)
+- USB webcam
+- USB microphone
+- Speakers (USB or 3.5mm)
+
+### 2. One-line install (recommended)
+
 ```bash
-ipconfig
+curl -fsSL https://raw.githubusercontent.com/UnclePhilburt/klyramachine/main/easy_install.sh | bash
 ```
 
-Look for "IPv4 Address" - it will look like `192.168.1.100` or similar.
+This handles apt deps, uv-managed Python 3.12, the venv, ALSA config (only
+on bare-ALSA systems), the Vosk wake-word model, the Piper TTS voice, and
+the systemd service with auto-update.
 
-## Part 2: Raspberry Pi Client Setup
-
-### 1. Prepare Raspberry Pi
-
-You need:
-- Raspberry Pi (any model with USB ports)
-- Camera (USB webcam or Pi Camera Module)
-- USB Microphone
-- Speaker (USB or 3.5mm jack)
-- Power supply
-- SD card with Raspberry Pi OS installed
-
-### 2. Install Dependencies on Pi
+### 3. Manual install
 
 ```bash
-cd ~/
-git clone <your-repo-url>  # or copy files manually
+git clone https://github.com/UnclePhilburt/klyramachine.git
 cd klyramachine/client
 
-# Install Python dependencies
-pip install -r requirements.txt
+# System deps
+sudo apt update
+sudo apt install -y python3-venv python3-pip portaudio19-dev libasound2-dev \
+    libsdl2-2.0-0 libsdl2-mixer-2.0-0 build-essential
 
-# For audio to work on Raspberry Pi, you may need:
-sudo apt-get install python3-pyaudio portaudio19-dev
-sudo apt-get install python3-pygame
+# Python deps
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install pygame webrtcvad
 ```
 
-### 3. Configure Client
+### 4. Configure
 
 ```bash
 cp config.example.json config.json
 nano config.json
 ```
 
-Edit the file:
 ```json
 {
-  "server_url": "http://192.168.1.100:8000",  # Use your server IP here!
-  "client_id": "klyra_client_001",
+  "server_url": "https://klyramachine.onrender.com",
+  "client_id": "klyra_ubuntu_001",
   "camera_index": 0,
-  "vision_check_interval": 10,
-  "audio_record_duration": 5
+  "wake_word": "hey buddy",
+  "enable_camera": true
 }
 ```
 
-### 4. Test Camera and Microphone
+For local server development, use `http://localhost:8000` instead.
 
-Test camera:
-```bash
-python3 -c "import cv2; cam = cv2.VideoCapture(0); ret, frame = cam.read(); print('Camera works!' if ret else 'Camera failed'); cam.release()"
-```
+### 5. Test camera and microphone
 
-Test mic (record 3 seconds):
 ```bash
+# Camera
+python3 -c "import cv2; c=cv2.VideoCapture(0); ok,_=c.read(); print('Camera works!' if ok else 'Camera failed'); c.release()"
+
+# Mic (record 3 seconds)
 arecord -d 3 test.wav
 aplay test.wav
 ```
 
-### 5. Run Client
+### 6. Run
 
 ```bash
-python3 client.py
-```
-
-You should see:
-```
-Initializing Klyra Client...
-Client initialized! Connected to server: http://192.168.1.100:8000
-Server is online!
+python3 client_vosk.py        # offline wake word (default if model present)
+python3 client_text.py        # text-only fallback
+python3 client_companion.py   # spontaneous-observation mode
 ```
 
 ## Using Klyra Machine
 
-### Interactive Text Mode
-
-Just type your messages:
-```
-You: What do you see?
-Klyra: I can see you sitting at a desk with a laptop...
-```
-
-### Commands
-
-- Type anything to talk to Klyra
-- Type `quit` to exit
+Say **"Hey Buddy"** to wake Klyra, then talk. Or in text mode, just type.
 
 ## API Endpoints
 
@@ -169,9 +134,8 @@ Your server provides these endpoints:
 
 ### "Cannot connect to server"
 - Make sure server is running
-- Check the IP address in client config.json
-- Make sure both devices are on same network
-- Try pinging: `ping 192.168.1.100`
+- Check the URL in client `config.json`
+- For local dev: `curl http://localhost:8000/` should return `{"status":"online",...}`
 
 ### "Camera not available"
 - Check camera is plugged in
@@ -180,13 +144,13 @@ Your server provides these endpoints:
 
 ### "Error recording audio"
 - Check microphone is plugged in
-- Install: `sudo apt-get install portaudio19-dev`
+- Run `python3 client/debug_audio.py` to enumerate audio devices
 - Check volume: `alsamixer`
 
 ### "API Error"
-- Check your API keys in server/config.json
+- Check your API keys in `server/config.json` (or Render env vars)
 - Make sure you have credits in OpenAI and ElevenLabs accounts
-- Check server terminal for error messages
+- Check server logs
 
 ## Cost Estimates
 
@@ -196,14 +160,6 @@ Approximate API costs per interaction:
 - ElevenLabs: $0.01 - $0.02 per speech response
 
 Total: ~$0.03 - $0.08 per complete interaction
-
-## Next Steps
-
-- Add wake word detection ("Hey Klyra")
-- Implement continuous voice mode
-- Add memory/context persistence
-- Multiple client support
-- Web dashboard for monitoring
 
 ## Support
 

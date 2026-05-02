@@ -112,7 +112,7 @@ try:
         print("Try:")
         print("  1. Run: arecord -l")
         print("  2. Check USB connections")
-        print("  3. Check audio settings in raspi-config")
+        print("  3. Check audio settings (alsamixer / pavucontrol)")
 
     p.terminate()
 
