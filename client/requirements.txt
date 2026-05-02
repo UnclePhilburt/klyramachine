@@ -30,3 +30,7 @@ piper-tts>=1.2.0
 
 # Configuration
 python-dotenv>=1.0.0
+
+# Launcher webui (FastAPI on localhost:8080, served by client/web/server.py)
+fastapi>=0.110.0
+uvicorn>=0.27.0
